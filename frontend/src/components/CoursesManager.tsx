@@ -112,24 +112,24 @@ export default function CoursesManager() {
 
   // Find teacher record for the currently logged-in teacher user
   const { data: myTeacher } = useQuery({
-    queryKey: ["my-teacher-record", session?.user?.id],
+    queryKey: ["my-teacher-record", session?.user?.email],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
-      const { data } = await mern.from("teachers").select("id").eq("user_id", session.user.id);
+      if (!session?.user?.email) return null;
+      const { data } = await mern.from("teachers").select("id").eq("email", session.user.email.toLowerCase());
       return data?.[0] ?? null;
     },
-    enabled: role === "teacher" && !!session?.user?.id,
+    enabled: role === "teacher" && !!session?.user?.email,
   });
 
   // Find student record for the currently logged-in student user
   const { data: myStudent } = useQuery({
-    queryKey: ["my-student-record", session?.user?.id],
+    queryKey: ["my-student-record", session?.user?.email],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
-      const { data } = await mern.from("students").select("id,courses").eq("user_id", session.user.id);
+      if (!session?.user?.email) return null;
+      const { data } = await mern.from("students").select("id,courses").eq("email", session.user.email.toLowerCase());
       return data?.[0] ?? null;
     },
-    enabled: role === "student" && !!session?.user?.id,
+    enabled: role === "student" && !!session?.user?.email,
   });
 
   // For teachers: filter to only their assigned courses
@@ -181,11 +181,15 @@ export default function CoursesManager() {
       if (!selectedTeacherId) throw new Error("Please select a teacher");
       if (selectedCourseIds.length === 0) throw new Error("Please select at least one course");
 
-      await Promise.all(
-        selectedCourseIds.map((courseId) =>
-          mern.from("courses").update({ teacher_id: selectedTeacherId }).eq("id", courseId)
-        )
+      const results = await Promise.all(
+        selectedCourseIds.map(async (courseId) => {
+          const res = await mern.from("courses").update({ teacher_id: selectedTeacherId }).eq("id", courseId);
+          return res;
+        })
       );
+
+      const firstError = results.find((r: any) => r?.error)?.error;
+      if (firstError) throw new Error(firstError.message ?? "Backend error during teacher assignment");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["courses"] });
@@ -202,15 +206,19 @@ export default function CoursesManager() {
       if (selectedStudentIds.length === 0) throw new Error("Please select at least one student");
       if (selectedCourseIds.length === 0) throw new Error("Please select at least one course");
 
-      await Promise.all(
+      const results = await Promise.all(
         selectedStudentIds.map(async (studentId) => {
           const student = students.find((s) => s.id === studentId);
-          if (!student) return;
+          if (!student) return { ok: true };
           const currentCourses = student.courses || [];
           const updatedCourses = Array.from(new Set([...currentCourses, ...selectedCourseIds]));
-          await mern.from("students").update({ courses: updatedCourses }).eq("id", studentId);
+          const res = await mern.from("students").update({ courses: updatedCourses }).eq("id", studentId);
+          return res;
         })
       );
+
+      const firstError = results.find((r: any) => r?.error)?.error;
+      if (firstError) throw new Error(firstError.message ?? "Backend error during student enrollment");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["students"] });

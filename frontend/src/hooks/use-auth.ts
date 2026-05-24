@@ -22,22 +22,28 @@ export function useAuth(): AuthState {
     } = mern.auth.onAuthStateChange((_e, s) => {
       setSession(s);
       if (s?.user) {
-        setTimeout(async () => {
-          const { data } = await mern
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", s.user.id);
-          const roles = (data ?? []).map((r) => r.role as AppRole);
-          const best = roles.includes("admin")
-            ? "admin"
-            : roles.includes("teacher")
-              ? "teacher"
-              : roles.includes("student")
-                ? "student"
-                : null;
-          setRole(best);
+        const metaRole = s.user.raw_user_meta_data?.role as AppRole | undefined;
+        if (metaRole) {
+          setRole(metaRole);
           setLoading(false);
-        }, 0);
+        } else {
+          setTimeout(async () => {
+            const { data } = await mern
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", s.user.id);
+            const roles = (data ?? []).map((r) => r.role as AppRole);
+            const best = roles.includes("admin")
+              ? "admin"
+              : roles.includes("teacher")
+                ? "teacher"
+                : roles.includes("student")
+                  ? "student"
+                  : null;
+            setRole(best);
+            setLoading(false);
+          }, 0);
+        }
       } else {
         setRole(null);
         setLoading(false);
@@ -45,7 +51,15 @@ export function useAuth(): AuthState {
     });
     mern.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (!data.session) setLoading(false);
+      if (!data.session) {
+        setLoading(false);
+      } else {
+        const metaRole = data.session.user?.raw_user_meta_data?.role as AppRole | undefined;
+        if (metaRole) {
+          setRole(metaRole);
+          setLoading(false);
+        }
+      }
     });
     return () => subscription.unsubscribe();
   }, []);

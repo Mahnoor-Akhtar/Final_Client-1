@@ -72,7 +72,8 @@ const empty = {
 };
 
 export default function StudentsManager() {
-  const { session, role } = useAuth();
+  const { session, role, loading } = useAuth();
+
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
@@ -115,13 +116,13 @@ export default function StudentsManager() {
 
   // Find teacher record for the currently logged-in teacher user
   const { data: myTeacher } = useQuery({
-    queryKey: ["my-teacher-record", session?.user?.id],
+    queryKey: ["my-teacher-record", session?.user?.email],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
-      const { data } = await mern.from("teachers").select("id").eq("user_id", session.user.id);
+      if (!session?.user?.email) return null;
+      const { data } = await mern.from("teachers").select("id").eq("email", session.user.email.toLowerCase());
       return data?.[0] ?? null;
     },
-    enabled: role === "teacher" && !!session?.user?.id,
+    enabled: role === "teacher" && !!session?.user?.email,
   });
 
   // Get full course data assigned to this teacher
@@ -137,12 +138,27 @@ export default function StudentsManager() {
 
   const teacherCourseIds = teacherCourses.map((c: any) => c.id);
 
+  // Normalise the `courses` field for a student record (handles array or JSON string)
+  const getStudentCourses = (s: any): string[] => {
+    if (!s?.courses) return [];
+    if (Array.isArray(s.courses)) return s.courses;
+    if (typeof s.courses === "string") {
+      try {
+        const parsed = JSON.parse(s.courses);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   // For teachers: filter by selected course, or show all their students
   const visibleStudents = role === "teacher"
     ? courseFilter !== "all"
-      ? students.filter((s) => s.courses && s.courses.includes(courseFilter))
+      ? students.filter((s) => getStudentCourses(s).includes(courseFilter))
       : teacherCourseIds.length > 0
-        ? students.filter((s) => s.courses && s.courses.some((cId) => teacherCourseIds.includes(cId)))
+        ? students.filter((s) => getStudentCourses(s).some((cId) => teacherCourseIds.includes(cId)))
         : []
     : students;
 
@@ -193,6 +209,23 @@ export default function StudentsManager() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (role !== "admin" && role !== "teacher") {
+    return (
+      <div className="p-6 text-center text-muted-foreground animate-fade-in py-16">
+        <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+        <p className="text-sm font-light">Only faculty members and administrators can access the student directory.</p>
+      </div>
+    );
+  }
+
   const filtered = visibleStudents.filter((s) => {
     const matchSearch =
       !search ||
@@ -223,6 +256,21 @@ export default function StudentsManager() {
     });
     setOpen(true);
   };
+  const getSharedCourses = (studentCourses: string[] | undefined | null | string) => {
+    let arr: string[] = [];
+    if (Array.isArray(studentCourses)) arr = studentCourses;
+    else if (typeof studentCourses === "string") {
+      try {
+        const parsed = JSON.parse(studentCourses);
+        if (Array.isArray(parsed)) arr = parsed;
+      } catch {}
+    }
+    if (arr.length === 0) return [];
+    if (role === "admin") {
+      return courses.filter((c) => arr.includes(c.id)).map((c) => c.code);
+    }
+    return teacherCourses.filter((c) => arr.includes(c.id)).map((c) => c.code);
+  };
 
   return (
     <div className="space-y-6 max-w-7xl animate-fade-in">
@@ -242,13 +290,15 @@ export default function StudentsManager() {
               : "registered students in active sections"}.
           </p>
         </div>
-          <Button
-            onClick={openAdd}
-            className="h-10 px-5 rounded-xl text-xs font-bold text-white shadow-md transition-all duration-300 hover:shadow-primary/10 active:scale-95 cursor-pointer"
-            style={{ background: "var(--gradient-brand)" }}
-          >
-            <Plus className="h-4 w-4 mr-1.5" /> Add Student
-          </Button>
+          {role === "admin" && (
+            <Button
+              onClick={openAdd}
+              className="h-10 px-5 rounded-xl text-xs font-bold text-white shadow-md transition-all duration-300 hover:shadow-primary/10 active:scale-95 cursor-pointer"
+              style={{ background: "var(--gradient-brand)" }}
+            >
+              <Plus className="h-4 w-4 mr-1.5" /> Add Student
+            </Button>
+          )}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -339,7 +389,22 @@ export default function StudentsManager() {
                   colSpan={8}
                   className="text-center py-12 text-muted-foreground text-sm font-light"
                 >
-                  No student records found in this category.
+                  {role === "teacher" ? (
+                    <div className="space-y-2">
+                      <p className="font-semibold text-foreground">No students enrolled in your courses yet.</p>
+                      {teacherCourseIds.length === 0 ? (
+                        <p>You have no assigned courses. Contact the admin to assign courses to your profile.</p>
+                      ) : (
+                        <p>
+                          You teach {teacherCourseIds.length} course(s), but none of the {students.length} students in the system have been enrolled in them yet.
+                          <br />
+                          Ask the admin to open <span className="font-semibold">Courses → Assign Courses</span> and enroll students in your courses.
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    "No student records found in this category."
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -375,16 +440,23 @@ export default function StudentsManager() {
                     <TableCell className="text-xs">{s.semester ?? "—"}</TableCell>
                     <TableCell className="text-xs">
                       {s.courses && s.courses.length > 0 ? (
-                        <Badge variant="secondary" className="font-bold rounded-lg text-[10px] px-2 py-0.5">
-                          {s.courses.length} Assigned
-                        </Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {getSharedCourses(s.courses).map((code) => (
+                            <Badge key={code} variant="secondary" className="font-bold rounded-lg text-[9px] px-2 py-0.5">
+                              {code}
+                            </Badge>
+                          ))}
+                          {getSharedCourses(s.courses).length === 0 && (
+                            <span className="text-muted-foreground text-xs font-light">None</span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground text-xs font-light">None</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
-                        {role !== "teacher" && (
+                        {role === "admin" && (
                           <>
                             <Button
                               variant="ghost"

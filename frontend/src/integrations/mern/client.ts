@@ -206,7 +206,10 @@ export const mern = {
           user: {
             id: payload.id || payload.sub,
             email: payload.email,
-            raw_user_meta_data: payload.user_metadata || {},
+            raw_user_meta_data: {
+              ...(payload.user_metadata || {}),
+              role: payload.role,
+            },
           },
         };
         localStorage.setItem("mock_session", JSON.stringify(session));
@@ -304,16 +307,15 @@ export const mern = {
     },
 
     async signOut() {
-      try {
-        await fetch(`${API_URL}/api/auth/logout`, {
-          method: "POST",
-          headers: {
-            ...getAuthHeaders(),
-          },
-        });
-      } catch (error) {
-        console.error("Logout request error:", error);
-      }
+      const headers = getAuthHeaders();
+      // Call backend logout endpoint in the background without awaiting
+      fetch(`${API_URL}/api/auth/logout`, {
+        method: "POST",
+        headers,
+      }).catch((error) => {
+        console.error("Logout request error in background:", error);
+      });
+
       localStorage.removeItem("mock_session");
       authCallbacks.forEach((cb) => cb("SIGNED_OUT", null));
       return { error: null };

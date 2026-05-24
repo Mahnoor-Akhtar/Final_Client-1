@@ -18,6 +18,7 @@ import {
   Github,
   ExternalLink,
   Upload,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export const Route = createFileRoute("/app/fyp")({
 });
 
 function FYPRoute() {
-  const { session, role } = useAuth();
+  const { session, role, loading } = useAuth();
   const queryClient = useQueryClient();
 
   // Dialog opens
@@ -286,6 +287,14 @@ function FYPRoute() {
       comments: gradeComment,
     });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Student Flow
   if (role === "student") {

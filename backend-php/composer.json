@@ -1,0 +1,30 @@
+{
+    "name": "college-cms/backend-php",
+    "description": "PHP Slim and Eloquent backend API for College Management System",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "slim/slim": "^4.12",
+        "slim/psr7": "^1.6",
+        "vlucas/phpdotenv": "^5.6",
+        "illuminate/database": "^10.0",
+        "firebase/php-jwt": "^6.10",
+        "guzzlehttp/guzzle": "^7.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "config": {
+        "process-timeout": 0,
+        "allow-plugins": {
+            "kylekatarnls/update-helper": true
+        },
+        "policy": {
+            "advisories": {
+                "ignore": ["firebase/php-jwt"]
+            }
+        }
+    }
+}

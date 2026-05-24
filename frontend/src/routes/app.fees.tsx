@@ -14,6 +14,7 @@ import {
   Receipt,
   ShieldCheck,
   Landmark,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,8 @@ export const Route = createFileRoute("/app/fees")({
 });
 
 function FeesRoute() {
-  const { session, role } = useAuth();
+  const { session, role, loading } = useAuth();
+
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -117,10 +119,24 @@ function FeesRoute() {
       setNewDueDate("");
       setSelectedStudentId("");
     },
-    onError: () => {
-      toast.error("Failed to create invoice");
-    },
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (role !== "admin" && role !== "student") {
+    return (
+      <div className="p-6 text-center text-muted-foreground animate-fade-in py-16">
+        <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+        <p className="text-sm font-light">Only students and administrators can view fee records.</p>
+      </div>
+    );
+  }
 
   const handlePayClick = (invoice: any) => {
     setSelectedInvoice(invoice);

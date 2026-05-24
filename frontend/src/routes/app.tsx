@@ -27,8 +27,8 @@ function AppLayout() {
   useEffect(() => {
     if (!session?.user) return;
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-    const socket = io(API_URL);
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5001";
+    const socket = io(SOCKET_URL);
 
     // Join rooms for userId, email, and role
     socket.emit("join", session.user.id);
@@ -153,12 +153,16 @@ function AppLayout() {
     },
   });
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
+  }
+
+  if (!session) {
+    return null;
   }
 
   if (!role) {
@@ -171,6 +175,7 @@ function AppLayout() {
           </p>
           <Button
             onClick={async () => {
+              queryClient.clear();
               await mern.auth.signOut();
               navigate({ to: "/login" });
             }}
@@ -183,6 +188,7 @@ function AppLayout() {
   }
 
   const handleSignOut = async () => {
+    queryClient.clear();
     await mern.auth.signOut();
     toast.success("Signed out");
     navigate({ to: "/login" });

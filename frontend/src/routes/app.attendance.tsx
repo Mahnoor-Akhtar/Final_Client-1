@@ -16,6 +16,7 @@ import {
   ChevronRight,
   UserX,
   Clock,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/app/attendance")({
 });
 
 function AttendanceRoute() {
-  const { session, role } = useAuth();
+  const { session, role, loading } = useAuth();
   const queryClient = useQueryClient();
   const [selectedCourse, setSelectedCourse] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split("T")[0]);
@@ -59,13 +60,13 @@ function AttendanceRoute() {
 
   // Find teacher record for the current user (for filtering courses)
   const { data: myTeacher } = useQuery({
-    queryKey: ["my-teacher-record", session?.user?.id],
+    queryKey: ["my-teacher-record", session?.user?.email],
     queryFn: async () => {
-      if (!session?.user?.id) return null;
-      const { data } = await mern.from("teachers").select("id").eq("user_id", session.user.id);
+      if (!session?.user?.email) return null;
+      const { data } = await mern.from("teachers").select("id").eq("email", session.user.email.toLowerCase());
       return data?.[0] ?? null;
     },
-    enabled: role === "teacher" && !!session?.user?.id,
+    enabled: role === "teacher" && !!session?.user?.email,
   });
 
   // For teachers, only show their assigned courses; for admin show all
@@ -123,6 +124,21 @@ function AttendanceRoute() {
     },
   });
 
+  // Normalise the `courses` field for a student record (handles array or JSON string)
+  const getStudentCourses = (s: any): string[] => {
+    if (!s?.courses) return [];
+    if (Array.isArray(s.courses)) return s.courses;
+    if (typeof s.courses === "string") {
+      try {
+        const parsed = JSON.parse(s.courses);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
   // Initialize marking sheet when course is selected
   const handleLoadClass = () => {
     if (!selectedCourse) {
@@ -134,8 +150,8 @@ function AttendanceRoute() {
       [];
 
     // Only load students enrolled in the selected course
-    const enrolledStudents = students?.filter(
-      (s: any) => s.courses && s.courses.includes(selectedCourse)
+    const enrolledStudents = students?.filter((s: any) =>
+      getStudentCourses(s).includes(selectedCourse),
     ) ?? [];
 
     const newSheet: Record<string, "present" | "absent" | "late"> = {};
@@ -147,7 +163,13 @@ function AttendanceRoute() {
     });
 
     setMarkingSheet(newSheet);
-    toast.info(`Loaded student sheet for ${selectedDate}`);
+    if (enrolledStudents.length === 0) {
+      toast.warning(
+        `No students are enrolled in this course yet. Ask the admin to enroll students via Courses → Assign Courses.`,
+      );
+    } else {
+      toast.info(`Loaded ${enrolledStudents.length} student(s) for ${selectedDate}`);
+    }
   };
 
   const handleToggleStatus = (studentId: string, status: "present" | "absent" | "late") => {
@@ -179,6 +201,14 @@ function AttendanceRoute() {
   const handleMockPdfExport = () => {
     window.print();
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Student specific view
   if (role === "student") {

@@ -45,7 +45,8 @@ type Department = {
 const empty = { name: "", code: "" };
 
 function DepartmentsRoute() {
-  const { role } = useAuth();
+  const { role, loading } = useAuth();
+
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Department | null>(null);
@@ -119,6 +120,23 @@ function DepartmentsRoute() {
     },
     onError: (e: any) => toast.error(e?.message ?? "Failed to delete"),
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (role !== "admin") {
+    return (
+      <div className="p-6 text-center text-muted-foreground animate-fade-in py-16">
+        <h2 className="text-xl font-bold text-foreground mb-2">Access Denied</h2>
+        <p className="text-sm font-light">Only administrators can access or manage department configurations.</p>
+      </div>
+    );
+  }
 
   const openAdd = () => {
     setEditing(null);

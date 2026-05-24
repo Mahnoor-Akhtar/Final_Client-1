@@ -92,99 +92,30 @@ function Dashboard() {
   const { session, role } = useAuth();
   const navigate = useNavigate();
 
-  // Admin Query
-  const { data: adminData } = useQuery({
-    queryKey: ["admin-dashboard-stats"],
-    enabled: role === "admin",
+  // Load unified dashboard stats
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ["dashboard-stats", role, session?.user?.email],
     queryFn: async () => {
-      const [s, t, c, d, comp, notif] = await Promise.all([
-        mern.from("students").select("*"),
-        mern.from("teachers").select("*"),
-        mern.from("courses").select("*"),
-        mern.from("departments").select("*"),
-        mern.from("complaints").select("*"),
-        mern.from("notifications").select("*"),
-      ]);
-
-      return {
-        students: s.data?.length ?? 0,
-        teachers: t.data?.length ?? 0,
-        courses: c.data?.length ?? 0,
-        departments: d.data?.length ?? 0,
-        pendingComplaints: comp.data?.filter((x: any) => x.status === "pending") ?? [],
-        recentNotifications: notif.data?.slice(0, 4) ?? [],
-      };
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const raw = localStorage.getItem("mock_session");
+      const sessionObj = raw ? JSON.parse(raw) : null;
+      const token = sessionObj?.access_token;
+      
+      const res = await fetch(`${API_URL}/api/dashboard/stats`, {
+        headers: {
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error.message);
+      return json.data;
     },
+    enabled: !!role && !!session?.user,
   });
 
-  // Teacher Query
-  const { data: teacherData } = useQuery({
-    queryKey: ["teacher-dashboard-stats", session?.user?.email],
-    enabled: role === "teacher",
-    queryFn: async () => {
-      const email = session?.user?.email?.toLowerCase();
-      if (!email) return null;
-      const { data: teachers } = await mern.from("teachers").select("*").eq("email", email);
-      const teacher = teachers?.[0];
-      if (!teacher) return null;
-
-      const [c, fyp, tt, depts] = await Promise.all([
-        mern.from("courses").select("*").eq("teacher_id", teacher.id),
-        mern.from("fyp_groups").select("*").eq("supervisor_id", teacher.id),
-        mern.from("timetables").select("*").eq("teacher_id", teacher.id),
-        teacher.department_id ? mern.from("departments").select("*").eq("id", teacher.department_id) : Promise.resolve({ data: [] }),
-      ]);
-
-      return {
-        profile: teacher,
-        courses: c.data ?? [],
-        fypGroups: fyp.data ?? [],
-        timetable: tt.data ?? [],
-        department: depts.data?.[0] || null,
-      };
-    },
-  });
-
-  // Student Query
-  const { data: studentData } = useQuery({
-    queryKey: ["student-dashboard-stats", session?.user?.email],
-    enabled: role === "student",
-    queryFn: async () => {
-      const email = session?.user?.email?.toLowerCase();
-      if (!email) return null;
-      const { data: students } = await mern.from("students").select("*").eq("email", email);
-      const student = students?.[0];
-      if (!student) return null;
-
-      const [att, fees, fyp, tt, c, depts] = await Promise.all([
-        mern.from("attendance").select("*").eq("student_id", student.id),
-        mern.from("fees").select("*").eq("student_id", student.id),
-        mern.from("fyp_groups").select("*"),
-        mern.from("timetables").select("*").eq("department_id", student.department_id),
-        mern.from("courses").select("*"),
-        student.department_id ? mern.from("departments").select("*").eq("id", student.department_id) : Promise.resolve({ data: [] }),
-      ]);
-
-      const myFyp = fyp.data?.find((g: any) => g.members?.includes(student.id)) || null;
-
-      const allCourses = c.data ?? [];
-      const studentCourses = allCourses.filter((course: any) =>
-        student.courses && student.courses.length > 0
-          ? student.courses.includes(course.id)
-          : course.department_id === student.department_id
-      );
-
-      return {
-        profile: student,
-        attendance: att.data ?? [],
-        fees: fees.data ?? [],
-        fypGroup: myFyp,
-        timetable: tt.data ?? [],
-        courses: studentCourses,
-        department: depts.data?.[0] || null,
-      };
-    },
-  });
+  const adminData = role === "admin" ? dashboardData : null;
+  const teacherData = role === "teacher" ? dashboardData : null;
+  const studentData = role === "student" ? dashboardData : null;
 
   // Charts Data
   const monthlyAdmissions = [
@@ -206,6 +137,14 @@ function Dashboard() {
     { d: "Thu", pct: 90 },
     { d: "Fri", pct: 86 },
   ];
+
+  if (isLoading || !dashboardData) {
+    return (
+      <div className="min-h-[60vh] grid place-items-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   // ================= ADMIN DASHBOARD =================
   if (role === "admin") {

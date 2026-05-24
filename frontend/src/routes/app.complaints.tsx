@@ -11,6 +11,7 @@ import {
   CornerDownRight,
   Inbox,
   Filter,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/app/complaints")({
 });
 
 function ComplaintsRoute() {
-  const { session, role } = useAuth();
+  const { session, role, loading } = useAuth();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<"pending" | "resolved" | "all">("all");
@@ -45,6 +46,7 @@ function ComplaintsRoute() {
   const [compTitle, setCompTitle] = useState("");
   const [compCategory, setCompCategory] = useState("Facilities");
   const [compDesc, setCompDesc] = useState("");
+  const [selectedTeacherId, setSelectedTeacherId] = useState("");
 
   // Resolve Form State
   const [adminReply, setAdminReply] = useState("");
@@ -56,6 +58,26 @@ function ComplaintsRoute() {
       const { data } = await mern.from("students").select("*");
       return data ?? [];
     },
+  });
+
+  // 1b. Fetch Teachers
+  const { data: teachers = [] } = useQuery({
+    queryKey: ["complaint-teachers"],
+    queryFn: async () => {
+      const { data } = await mern.from("teachers").select("id,full_name");
+      return data ?? [];
+    },
+  });
+
+  // 1c. Find active teacher record for logged-in teacher
+  const { data: activeTeacher } = useQuery({
+    queryKey: ["my-teacher-record", session?.user?.email],
+    queryFn: async () => {
+      if (!session?.user?.email) return null;
+      const { data } = await mern.from("teachers").select("id").eq("email", session.user.email.toLowerCase());
+      return data?.[0] ?? null;
+    },
+    enabled: role === "teacher" && !!session?.user?.email,
   });
 
   // 2. Fetch Complaints
@@ -80,6 +102,7 @@ function ComplaintsRoute() {
       toast.success("Complaint submitted successfully!");
       setCompTitle("");
       setCompDesc("");
+      setSelectedTeacherId("");
     },
     onError: () => {
       toast.error("Failed to submit complaint");
@@ -125,6 +148,7 @@ function ComplaintsRoute() {
       category: compCategory,
       description: compDesc,
       status: "pending",
+      teacher_id: selectedTeacherId || null,
     });
   };
 
@@ -144,6 +168,14 @@ function ComplaintsRoute() {
       reply: adminReply,
     });
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12 py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Student specific view
   if (role === "student") {
@@ -205,6 +237,24 @@ function ComplaintsRoute() {
                         </option>
                       ),
                     )}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Assign to Teacher (Optional)
+                  </label>
+                  <select
+                    value={selectedTeacherId}
+                    onChange={(e) => setSelectedTeacherId(e.target.value)}
+                    className="w-full h-11 rounded-xl border border-border/80 bg-background/50 px-3 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                  >
+                    <option value="">-- Support Helpdesk (Default) --</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.full_name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -280,6 +330,14 @@ function ComplaintsRoute() {
                             <span className="font-bold text-foreground">{comp.category}</span> ·
                             Lodged on {new Date(comp.created_at).toLocaleDateString()}
                           </p>
+                          {comp.teacher_id && (
+                            <p className="text-[11px] text-muted-foreground font-light mt-1">
+                              Assigned to:{" "}
+                              <span className="font-semibold text-primary">
+                                {teachers?.find((t) => t.id === comp.teacher_id)?.full_name || "Faculty Member"}
+                              </span>
+                            </p>
+                          )}
                         </div>
                         <Badge
                           variant={comp.status === "resolved" ? "default" : "outline"}
@@ -321,10 +379,17 @@ function ComplaintsRoute() {
 
   // Admin / Faculty inbox view
   const inboxList =
-    complaints?.filter((c) => {
-      if (activeTab === "all") return true;
-      return c.status === activeTab;
-    }) ?? [];
+    complaints
+      ?.filter((c) => {
+        if (activeTab === "all") return true;
+        return c.status === activeTab;
+      })
+      .filter((c) => {
+        if (role === "teacher") {
+          return c.teacher_id === activeTeacher?.id;
+        }
+        return true;
+      }) ?? [];
 
   return (
     <div className="space-y-8 max-w-7xl animate-fade-in pb-12">
@@ -430,11 +495,21 @@ function ComplaintsRoute() {
                         {comp.description}
                       </p>
 
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-                        <span className="font-bold text-foreground">Submitted by:</span>
-                        <span className="font-light">
-                          {s?.full_name || "Unknown Student"} ({s?.roll_number || "—"})
-                        </span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pt-1">
+                        <div>
+                          <span className="font-bold text-foreground">Submitted by: </span>
+                          <span className="font-light">
+                            {s?.full_name || "Unknown Student"} ({s?.roll_number || "—"})
+                          </span>
+                        </div>
+                        {comp.teacher_id && (
+                          <div>
+                            <span className="font-bold text-foreground">Assigned to: </span>
+                            <span className="font-light text-primary font-medium">
+                              {teachers?.find((t) => t.id === comp.teacher_id)?.full_name || "Faculty Member"}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {comp.reply && (
@@ -451,7 +526,7 @@ function ComplaintsRoute() {
                     </div>
 
                     <div className="shrink-0 flex items-center">
-                      {comp.status === "pending" && role !== "student" && (
+                      {comp.status === "pending" && (
                         <Button
                           onClick={() => handleResolveClick(comp)}
                           size="sm"
