@@ -33,7 +33,8 @@ router.get(
 
 // Register
 router.post("/register", async (req, res) => {
-  const { email, password, options } = req.body;
+  const { password, options } = req.body;
+  const email = req.body.email ? req.body.email.toLowerCase().trim() : "";
 
   try {
     // Check if user already exists
@@ -48,13 +49,11 @@ router.post("/register", async (req, res) => {
 
     const fullName = options?.data?.full_name || email.split("@")[0];
 
-    const newUser = new User({
+    const newUser = await User.create({
       email,
       password: hashedPassword,
       raw_user_meta_data: { full_name: fullName },
     });
-
-    await newUser.save();
 
     // Auto-detect role based on email
     let role = "student";
@@ -143,7 +142,8 @@ router.post("/register", async (req, res) => {
 
 // Login
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  const email = req.body.email ? req.body.email.toLowerCase().trim() : "";
 
   try {
     let user = await User.findOne({ email });
@@ -203,6 +203,56 @@ router.post("/login", async (req, res) => {
 // Logout
 router.post("/logout", (req, res) => {
   return res.status(200).json({ error: null });
+});
+
+// Change password (authenticated)
+router.post("/change-password", requireAuth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: { message: "Both old and new passwords are required" } });
+  }
+  if (String(newPassword).length < 6) {
+    return res.status(400).json({ error: { message: "New password must be at least 6 characters" } });
+  }
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: { message: "User not found" } });
+    if (!user.password) {
+      return res.status(400).json({ error: { message: "Password change not available for this account" } });
+    }
+    const ok = await bcrypt.compare(oldPassword, user.password);
+    if (!ok) return res.status(400).json({ error: { message: "Current password is incorrect" } });
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash(newPassword, salt);
+    await User.updateMany({ id: req.user.id }, { $set: { password: hashed } });
+    return res.status(200).json({ error: null, data: { ok: true } });
+  } catch (error) {
+    return res.status(500).json({ error: { message: error.message } });
+  }
+});
+
+// Reset Password
+router.post("/reset-password", async (req, res) => {
+  const { newPassword } = req.body;
+  const email = req.body.email ? req.body.email.toLowerCase().trim() : "";
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: { message: "Email and new password are required" } });
+  }
+  if (String(newPassword).length < 6) {
+    return res.status(400).json({ error: { message: "New password must be at least 6 characters" } });
+  }
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ error: { message: "User with this email does not exist" } });
+    }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    await User.updateMany({ email: email.toLowerCase() }, { $set: { password: hashedPassword } });
+    return res.status(200).json({ error: null, data: { ok: true } });
+  } catch (error) {
+    return res.status(500).json({ error: { message: error.message } });
+  }
 });
 
 // Me (Get Current User Session)

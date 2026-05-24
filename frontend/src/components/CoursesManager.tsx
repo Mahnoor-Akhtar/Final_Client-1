@@ -40,8 +40,8 @@ const schema = z.object({
   credit_hours: z.number().int().min(1).max(10),
   semester: z.number().int().min(1).max(12).nullable(),
   degree: z.string().trim().max(40).optional().or(z.literal("")),
-  department_id: z.string().uuid().nullable(),
-  teacher_id: z.string().uuid().nullable(),
+  department_id: z.string().min(1).nullable().or(z.literal("")).transform(v => v === "" ? null : v),
+  teacher_id: z.string().min(1).nullable(),
 });
 
 type Course = {

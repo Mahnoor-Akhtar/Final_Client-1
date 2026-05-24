@@ -37,7 +37,7 @@ const schema = z.object({
   full_name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(255),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
-  department_id: z.string().uuid().nullable(),
+  department_id: z.string().min(1).nullable().or(z.literal("")).transform(v => v === "" ? null : v),
   qualification: z.string().trim().max(120).optional().or(z.literal("")),
   salary: z.number().min(0).max(10000000).nullable(),
 });
@@ -195,8 +195,12 @@ export default function TeachersManager() {
           <h1 className="text-3xl font-bold tracking-tight">Teachers</h1>
           <p className="text-muted-foreground mt-1">{teachers.length} total faculty members.</p>
         </div>
-        <Button onClick={openAdd}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add teacher
+        <Button
+          onClick={openAdd}
+          className="h-10 px-5 rounded-xl text-xs font-bold text-white shadow-md transition-all duration-300 hover:shadow-primary/10 active:scale-95 cursor-pointer"
+          style={{ background: "var(--gradient-brand)" }}
+        >
+          <Plus className="h-4 w-4 mr-1.5" /> Add Teacher
         </Button>
       </div>
 

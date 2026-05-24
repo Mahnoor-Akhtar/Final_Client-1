@@ -22,6 +22,14 @@ import { lovable } from "@/integrations/lovable";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import logo from "@/assets/logo.png";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -47,6 +55,12 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
 
   const isDark = theme === "dark";
 
@@ -64,6 +78,39 @@ function LoginPage() {
     setEmail("");
     setPassword("");
     navigate({ to: "/app" });
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail || !newPassword || !confirmPassword) {
+      toast.warning("Please fill out all fields");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+
+    setResetLoading(true);
+    const { error } = await mern.auth.resetPassword({
+      email: resetEmail,
+      newPassword,
+    });
+    setResetLoading(false);
+
+    if (error) {
+      return toast.error((error as any).message);
+    }
+
+    toast.success("Password reset successfully! You can now log in.");
+    setIsResetOpen(false);
+    setResetEmail("");
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   return (
@@ -240,16 +287,13 @@ function LoginPage() {
                   >
                     Password
                   </Label>
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toast.info("Password resets are handled by PGC Administration.");
-                    }}
-                    className="text-[10px] text-primary font-bold hover:underline"
+                  <button
+                    type="button"
+                    onClick={() => setIsResetOpen(true)}
+                    className="text-[10px] text-primary font-bold hover:underline bg-transparent border-0 cursor-pointer p-0"
                   >
                     Forgot Password?
-                  </a>
+                  </button>
                 </div>
                 <div className="relative flex items-center">
                   <Lock className="absolute left-3.5 text-muted-foreground/60 h-4.5 w-4.5" />
@@ -305,6 +349,81 @@ function LoginPage() {
             </p>
           </div>
         </div>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+          <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-2xl border border-border/80 rounded-3xl shadow-lg">
+            <DialogHeader>
+              <DialogTitle className="font-serif font-bold text-xl text-foreground">
+                Reset Password
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground font-light">
+                Enter your registered email and choose a new password.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleResetPassword} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="reset-email" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Email Address
+                </Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  required
+                  placeholder="name@pgc.edu.pk"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="h-11 rounded-xl border border-border/80 bg-background/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="new-password" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  New Password
+                </Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="h-11 rounded-xl border border-border/80 bg-background/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password" className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Confirm New Password
+                </Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="h-11 rounded-xl border border-border/80 bg-background/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full h-11 rounded-xl text-white font-bold transition-all duration-300 shadow-md hover:shadow-primary/10 active:scale-95 cursor-pointer"
+                  style={{ background: "var(--gradient-brand)" }}
+                >
+                  {resetLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Reset Password"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

@@ -268,6 +268,41 @@ export const mern = {
       }
     },
 
+    async changePassword({ oldPassword, newPassword }: { oldPassword: string; newPassword: string }) {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/change-password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({ oldPassword, newPassword }),
+        });
+        const json = await res.json();
+        if (json.error) return { data: null, error: json.error };
+        return { data: json.data, error: null };
+      } catch (error: any) {
+        return { data: null, error: { message: error.message } };
+      }
+    },
+
+    async resetPassword({ email, newPassword }: any) {
+      try {
+        const res = await fetch(`${API_URL}/api/auth/reset-password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, newPassword }),
+        });
+        const json = await res.json();
+        if (json.error) return { data: null, error: json.error };
+        return { data: json.data, error: null };
+      } catch (error: any) {
+        return { data: null, error: { message: error.message } };
+      }
+    },
+
     async signOut() {
       try {
         await fetch(`${API_URL}/api/auth/logout`, {

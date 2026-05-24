@@ -1,5 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { modelsMap } from "../models/index.js";
 
 const router = express.Router();
@@ -80,6 +81,44 @@ const createAndEmitNotification = async (req, table, action, payload, doc) => {
         }
       }
 
+      else if (table === "fyp_groups") {
+        const { group_name, title, supervisor_id, members } = doc;
+        // 1. Notify supervisor teacher
+        const supervisor = await Teacher.findById(supervisor_id);
+        if (supervisor) {
+          await send(
+            supervisor.email,
+            "New FYP Supervision Request",
+            `Group "${group_name}" has requested you as supervisor for their project "${title}".`
+          );
+        }
+        // 2. Notify student members
+        if (members && members.length > 0) {
+          for (const mId of members) {
+            const student = await Student.findById(mId);
+            if (student) {
+              await send(
+                student.email,
+                "FYP Request Registered",
+                `Your FYP group request for "${title}" has been successfully submitted and is awaiting supervisor approval.`
+              );
+            }
+          }
+        }
+      }
+
+      else if (table === "fees") {
+        const { student_id, title, amount, due_date } = doc;
+        const student = await Student.findById(student_id);
+        if (student) {
+          await send(
+            student.email,
+            "New Fee Invoice Issued",
+            `An invoice of Rs. ${amount} for "${title}" has been issued. Please clear it by ${due_date}.`
+          );
+        }
+      }
+
       else if (table === "complaints") {
         const { student_id, title } = doc;
         const student = await Student.findById(student_id);
@@ -141,11 +180,17 @@ const createAndEmitNotification = async (req, table, action, payload, doc) => {
         if (status === "paid") {
           const student = await Student.findById(student_id);
           const studentEmail = student ? student.email : student_id;
+          const studentName = student ? student.full_name : "A student";
           
           await send(
             studentEmail,
             "Fee Payment Confirmed",
             `Payment of Rs. ${amount} for "${title}" via ${method || "online"} has been verified.`
+          );
+
+          await sendToAdmin(
+            "Fee Payment Received",
+            `${studentName} (${student ? student.roll_number : student_id}) paid Rs. ${amount} for "${title}" via ${method || "online"}.`
           );
         }
       }
@@ -166,6 +211,56 @@ router.get("/:table", validateTable, async (req, res) => {
   delete filters._asc;
   delete filters._limit;
 
+  // Server-side filter to secure notifications by user ID, email, or role
+  if (req.params.table === "notifications") {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecure_college_cms_secret_key_12345");
+        const userId = decoded.id;
+        const userEmail = decoded.email || "";
+        
+        const UserRole = modelsMap.user_roles;
+        const userRoleDoc = await UserRole.findOne({ user_id: userId });
+        const role = userRoleDoc ? userRoleDoc.role : "";
+
+        const Notification = modelsMap.notifications;
+        const allNotifications = await Notification.find();
+        const filtered = allNotifications.filter(n => {
+          const target = String(n.user_id || "").toLowerCase();
+          return (
+            target === String(userId).toLowerCase() ||
+            target === String(userEmail).toLowerCase() ||
+            target === String(role).toLowerCase()
+          );
+        });
+
+        // Apply sort order if requested
+        if (orderCol) {
+          filtered.sort((a, b) => {
+            const valA = a[orderCol];
+            const valB = b[orderCol];
+            if (valA < valB) return orderAsc ? -1 : 1;
+            if (valA > valB) return orderAsc ? 1 : -1;
+            return 0;
+          });
+        }
+        
+        // Apply limit if requested
+        const finalDocs = limit ? filtered.slice(0, limit) : filtered;
+
+        return res.status(200).json({
+          data: finalDocs,
+          count: finalDocs.length,
+          error: null,
+        });
+      } catch (err) {
+        console.error("Error decoding token in notifications GET:", err);
+      }
+    }
+  }
+
   // Adapt queries for specific fields if needed
   // E.g., handling array element matching or exact matching
   try {
@@ -180,6 +275,11 @@ router.get("/:table", validateTable, async (req, res) => {
     }
 
     const docs = await query;
+    // Debug logging: log number of documents and a sample
+    if (req.params.table === "teachers") {
+      console.log(`🔎 Fetched ${docs.length} teachers`);
+      console.log(docs.slice(0, 3)); // log first 3 for inspection
+    }
     return res.status(200).json({
       data: docs,
       count: docs.length,
@@ -198,6 +298,33 @@ router.post("/:table", validateTable, async (req, res) => {
     let result;
 
     const table = req.params.table;
+    
+    // Duplicate project and member check for FYP Groups
+    if (table === "fyp_groups") {
+      const items = Array.isArray(data) ? data : [data];
+      const FypGroup = modelsMap.fyp_groups;
+      const allGroups = await FypGroup.find();
+      for (const item of items) {
+        const titleToCheck = (item.title || "").trim();
+        if (titleToCheck) {
+          const alreadyApproved = allGroups.find(
+            g => g.status === "approved" && g.title.trim().toLowerCase() === titleToCheck.toLowerCase()
+          );
+          if (alreadyApproved) {
+            return res.status(400).json({ error: { message: "This project is already taken" } });
+          }
+        }
+        if (item.members && Array.isArray(item.members)) {
+          for (const mId of item.members) {
+            const alreadyInGroup = allGroups.find(g => g.members && g.members.includes(mId));
+            if (alreadyInGroup) {
+              return res.status(400).json({ error: { message: "One of the students is already in a group" } });
+            }
+          }
+        }
+      }
+    }
+
     const User = modelsMap.users;
     const UserRole = modelsMap.user_roles;
 
@@ -328,7 +455,70 @@ router.put("/:table", validateTable, async (req, res) => {
 
     const updatePayload = req.body;
 
+    // Validate approval of FYP Group duplicate title
+    if (req.params.table === "fyp_groups") {
+      const FypGroup = modelsMap.fyp_groups;
+      if (updatePayload.status === "approved") {
+        const targetGroups = await FypGroup.find(filters);
+        for (const targetGroup of targetGroups) {
+          const titleToCheck = (targetGroup.title || "").trim();
+          if (titleToCheck) {
+            const allGroups = await FypGroup.find();
+            const alreadyApproved = allGroups.find(
+              g => g.id !== targetGroup.id && g.status === "approved" && g.title.trim().toLowerCase() === titleToCheck.toLowerCase()
+            );
+            if (alreadyApproved) {
+              return res.status(400).json({ error: { message: "This project is already taken" } });
+            }
+          }
+        }
+      }
+    }
+
     const result = await req.Model.updateMany(filters, { $set: updatePayload });
+
+    // Auto-reject other pending groups with same title upon approval
+    if (req.params.table === "fyp_groups" && updatePayload.status === "approved") {
+      try {
+        const FypGroup = modelsMap.fyp_groups;
+        const targetGroups = await FypGroup.find(filters);
+        const allGroups = await FypGroup.find();
+        for (const targetGroup of targetGroups) {
+          const titleToCheck = (targetGroup.title || "").trim();
+          if (titleToCheck) {
+            const otherPendingGroups = allGroups.filter(
+              g => g.id !== targetGroup.id && g.status === "pending" && g.title.trim().toLowerCase() === titleToCheck.toLowerCase()
+            );
+            for (const pending of otherPendingGroups) {
+              await FypGroup.updateMany({ id: pending.id }, { $set: { status: "rejected" } });
+              // Send notification to members of auto-rejected group
+              if (pending.members && pending.members.length > 0) {
+                const Student = modelsMap.students;
+                const Notification = modelsMap.notifications;
+                const io = req.app.get("io");
+                for (const mId of pending.members) {
+                  const student = await Student.findById(mId);
+                  const studentEmail = student ? student.email : mId;
+                  const msg = `Your FYP group request for "${pending.title}" was automatically rejected because the project is already taken.`;
+                  const notif = await Notification.create({
+                    user_id: studentEmail,
+                    title: "FYP Project Taken",
+                    message: msg,
+                    read: false,
+                  });
+                  if (io) {
+                    io.to(studentEmail.toLowerCase()).emit("notification", notif);
+                    io.to(studentEmail).emit("notification", notif);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to auto-reject other pending groups:", err);
+      }
+    }
 
     try {
       const updatedDocs = await req.Model.find(filters);

@@ -304,7 +304,7 @@ function FeesRoute() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
               Student Registry
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Billing & Fees
             </h1>
             <p className="text-sm text-muted-foreground font-light font-sans">
@@ -322,7 +322,7 @@ function FeesRoute() {
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                     Pending Dues
                   </p>
-                  <p className="text-3xl font-serif font-black text-amber-600 mt-2">
+                  <p className="text-3xl font-display font-black text-amber-600 mt-2">
                     Rs.{" "}
                     {myInvoices
                       .filter((i) => i.status === "pending")
@@ -345,7 +345,7 @@ function FeesRoute() {
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                     Paid Tuition
                   </p>
-                  <p className="text-3xl font-serif font-black text-emerald-600 mt-2">
+                  <p className="text-3xl font-display font-black text-emerald-600 mt-2">
                     Rs.{" "}
                     {myInvoices
                       .filter((i) => i.status === "paid")
@@ -569,7 +569,7 @@ function FeesRoute() {
           <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
             Financial Operations
           </span>
-          <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
             Institutional Finance
           </h1>
           <p className="text-sm text-muted-foreground font-light font-sans">
@@ -586,7 +586,7 @@ function FeesRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Total Billing Dues
               </p>
-              <p className="text-3xl font-serif font-black text-amber-600 mt-2">
+              <p className="text-3xl font-display font-black text-amber-600 mt-2">
                 Rs. {totalOutstanding.toLocaleString()}
               </p>
             </div>
@@ -603,7 +603,7 @@ function FeesRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Revenue Collected
               </p>
-              <p className="text-3xl font-serif font-black text-emerald-600 mt-2">
+              <p className="text-3xl font-display font-black text-emerald-600 mt-2">
                 Rs. {totalCollected.toLocaleString()}
               </p>
             </div>
@@ -620,7 +620,7 @@ function FeesRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Collection Ratio
               </p>
-              <p className="text-3xl font-serif font-black text-foreground mt-2">
+              <p className="text-3xl font-display font-black text-foreground mt-2">
                 {invoices && invoices.length > 0
                   ? `${Math.round((totalCollected / (totalCollected + totalOutstanding)) * 100)}%`
                   : "0%"}

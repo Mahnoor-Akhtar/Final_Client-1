@@ -39,7 +39,7 @@ const groups: Record<
         { title: "Students", url: "/app/students", icon: GraduationCap },
         { title: "Teachers", url: "/app/teachers", icon: Users },
         { title: "Courses", url: "/app/courses", icon: BookOpen },
-        { title: "Degrees", url: "/app/degrees", icon: Logo },
+        { title: "Departments", url: "/app/departments", icon: Logo },
       ],
     },
     {

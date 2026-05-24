@@ -20,7 +20,7 @@ import { Route as AppStudentsRouteImport } from './routes/app.students'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
 import { Route as AppFypRouteImport } from './routes/app.fyp'
 import { Route as AppFeesRouteImport } from './routes/app.fees'
-import { Route as AppDegreesRouteImport } from './routes/app.degrees'
+import { Route as AppDepartmentsRouteImport } from './routes/app.departments'
 import { Route as AppCoursesRouteImport } from './routes/app.courses'
 import { Route as AppComplaintsRouteImport } from './routes/app.complaints'
 import { Route as AppAttendanceRouteImport } from './routes/app.attendance'
@@ -80,9 +80,9 @@ const AppFeesRoute = AppFeesRouteImport.update({
   path: '/fees',
   getParentRoute: () => AppRoute,
 } as any)
-const AppDegreesRoute = AppDegreesRouteImport.update({
-  id: '/degrees',
-  path: '/degrees',
+const AppDepartmentsRoute = AppDepartmentsRouteImport.update({
+  id: '/departments',
+  path: '/departments',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCoursesRoute = AppCoursesRouteImport.update({
@@ -109,7 +109,7 @@ export interface FileRoutesByFullPath {
   '/app/attendance': typeof AppAttendanceRoute
   '/app/complaints': typeof AppComplaintsRoute
   '/app/courses': typeof AppCoursesRoute
-  '/app/degrees': typeof AppDegreesRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/fees': typeof AppFeesRoute
   '/app/fyp': typeof AppFypRoute
   '/app/settings': typeof AppSettingsRoute
@@ -125,7 +125,7 @@ export interface FileRoutesByTo {
   '/app/attendance': typeof AppAttendanceRoute
   '/app/complaints': typeof AppComplaintsRoute
   '/app/courses': typeof AppCoursesRoute
-  '/app/degrees': typeof AppDegreesRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/fees': typeof AppFeesRoute
   '/app/fyp': typeof AppFypRoute
   '/app/settings': typeof AppSettingsRoute
@@ -143,7 +143,7 @@ export interface FileRoutesById {
   '/app/attendance': typeof AppAttendanceRoute
   '/app/complaints': typeof AppComplaintsRoute
   '/app/courses': typeof AppCoursesRoute
-  '/app/degrees': typeof AppDegreesRoute
+  '/app/departments': typeof AppDepartmentsRoute
   '/app/fees': typeof AppFeesRoute
   '/app/fyp': typeof AppFypRoute
   '/app/settings': typeof AppSettingsRoute
@@ -162,7 +162,7 @@ export interface FileRouteTypes {
     | '/app/attendance'
     | '/app/complaints'
     | '/app/courses'
-    | '/app/degrees'
+    | '/app/departments'
     | '/app/fees'
     | '/app/fyp'
     | '/app/settings'
@@ -178,7 +178,7 @@ export interface FileRouteTypes {
     | '/app/attendance'
     | '/app/complaints'
     | '/app/courses'
-    | '/app/degrees'
+    | '/app/departments'
     | '/app/fees'
     | '/app/fyp'
     | '/app/settings'
@@ -195,7 +195,7 @@ export interface FileRouteTypes {
     | '/app/attendance'
     | '/app/complaints'
     | '/app/courses'
-    | '/app/degrees'
+    | '/app/departments'
     | '/app/fees'
     | '/app/fyp'
     | '/app/settings'
@@ -291,11 +291,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppFeesRouteImport
       parentRoute: typeof AppRoute
     }
-    '/app/degrees': {
-      id: '/app/degrees'
-      path: '/degrees'
-      fullPath: '/app/degrees'
-      preLoaderRoute: typeof AppDegreesRouteImport
+    '/app/departments': {
+      id: '/app/departments'
+      path: '/departments'
+      fullPath: '/app/departments'
+      preLoaderRoute: typeof AppDepartmentsRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/courses': {
@@ -326,7 +326,7 @@ interface AppRouteChildren {
   AppAttendanceRoute: typeof AppAttendanceRoute
   AppComplaintsRoute: typeof AppComplaintsRoute
   AppCoursesRoute: typeof AppCoursesRoute
-  AppDegreesRoute: typeof AppDegreesRoute
+  AppDepartmentsRoute: typeof AppDepartmentsRoute
   AppFeesRoute: typeof AppFeesRoute
   AppFypRoute: typeof AppFypRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -340,7 +340,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAttendanceRoute: AppAttendanceRoute,
   AppComplaintsRoute: AppComplaintsRoute,
   AppCoursesRoute: AppCoursesRoute,
-  AppDegreesRoute: AppDegreesRoute,
+  AppDepartmentsRoute: AppDepartmentsRoute,
   AppFeesRoute: AppFeesRoute,
   AppFypRoute: AppFypRoute,
   AppSettingsRoute: AppSettingsRoute,

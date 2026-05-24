@@ -157,7 +157,7 @@ function ComplaintsRoute() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
               Support & Feedback
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Student Helpline
             </h1>
             <p className="text-sm text-muted-foreground font-light">
@@ -333,7 +333,7 @@ function ComplaintsRoute() {
           <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
             Administration
           </span>
-          <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
             Support Helpdesk
           </h1>
           <p className="text-sm text-muted-foreground font-light">

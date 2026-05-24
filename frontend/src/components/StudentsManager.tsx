@@ -39,7 +39,7 @@ const schema = z.object({
   full_name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(255),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
-  department_id: z.string().uuid().nullable(),
+  department_id: z.string().min(1).nullable(),
   degree: z.string().trim().max(40).optional().or(z.literal("")),
   semester: z.number().int().min(1).max(12).nullable(),
   address: z.string().trim().max(500).optional().or(z.literal("")),

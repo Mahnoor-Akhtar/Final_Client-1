@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import mongoose from "mongoose";
 import cors from "cors";
 import morgan from "morgan";
 import bcrypt from "bcryptjs";
@@ -14,6 +13,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 
 import "./middleware/passport.js";
+import { sequelize } from "./db.js";
 
 // Load routes
 import authRoutes from "./routes/auth.js";
@@ -42,7 +42,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/college-cms";
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -407,17 +406,23 @@ const seedDatabase = async () => {
   }
 };
 
-// Database connection
-mongoose
-  .connect(MONGO_URI)
+// Database connection (Supabase Postgres via Sequelize)
+sequelize
+  .authenticate()
   .then(() => {
-    console.log("Connected to MongoDB successfully at:", MONGO_URI);
-    // Trigger seed phase
-    // seedDatabase();
+    console.log("Connected to Supabase Postgres successfully.");
+    // Auto-create / update tables to match the model definitions.
+    return sequelize.sync({ alter: true });
+  })
+  .then(() => {
+    console.log("Database schema synchronized.");
+    return seedDatabase();
+  })
+  .then(() => {
     httpServer.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error("MongoDB connection failed:", err);
+    console.error("Postgres connection failed:", err);
   });

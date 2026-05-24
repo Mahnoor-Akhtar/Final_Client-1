@@ -110,7 +110,7 @@ function FYPRoute() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["fyp-groups"] });
-      toast.success("FYP group registered! Awaiting admin approval.");
+      toast.success("FYP group registered! Awaiting supervisor approval.");
       setGroupName("");
       setProjectTitle("");
       setAbstract("");
@@ -119,6 +119,20 @@ function FYPRoute() {
     },
     onError: () => {
       toast.error("Failed to register group");
+    },
+  });
+
+  // Group deletion mutation for clearing rejected requests
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await mern.from("fyp_groups").delete().eq("id", id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["fyp-groups"] });
+      toast.success("FYP request cleared. You can now register again.");
+    },
+    onError: () => {
+      toast.error("Failed to delete group request");
     },
   });
 
@@ -288,7 +302,7 @@ function FYPRoute() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
               Final Year Project
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Student Project Workspace
             </h1>
             <p className="text-sm text-muted-foreground font-light">
@@ -346,11 +360,14 @@ function FYPRoute() {
                       <option value="">-- No Partner --</option>
                       {students
                         ?.filter((s) => s.id !== currentStudent?.id)
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.full_name} ({s.roll_number})
-                          </option>
-                        ))}
+                        .map((s) => {
+                          const hasGroup = groups?.some((g) => g.members?.includes(s.id));
+                          return (
+                            <option key={s.id} value={s.id} disabled={hasGroup}>
+                              {s.full_name} ({s.roll_number}){hasGroup ? " - Already in a group" : ""}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
                 </div>
@@ -425,7 +442,7 @@ function FYPRoute() {
 
               <div className="flex justify-between items-start gap-2 relative z-10 border-b border-border/40 pb-4">
                 <div>
-                  <h2 className="text-xl font-serif font-black tracking-tight text-foreground">
+                  <h2 className="text-xl font-display font-black tracking-tight text-foreground">
                     {myGroup.group_name}
                   </h2>
                   <Badge
@@ -433,10 +450,16 @@ function FYPRoute() {
                     className={`mt-2.5 font-bold uppercase tracking-wider text-[9px] px-2.5 py-0.5 rounded-full ${
                       myGroup.status === "approved"
                         ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                        : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                        : myGroup.status === "rejected"
+                          ? "bg-red-500/10 text-red-500 border border-red-500/20"
+                          : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                     }`}
                   >
-                    {myGroup.status === "approved" ? "Group Active" : "Pending Approval"}
+                    {myGroup.status === "approved"
+                      ? "Group Active"
+                      : myGroup.status === "rejected"
+                        ? "Request Rejected"
+                        : "Pending Approval"}
                   </Badge>
                 </div>
               </div>
@@ -478,6 +501,27 @@ function FYPRoute() {
                     </div>
                   </div>
                 </div>
+                {myGroup.status === "rejected" && (
+                  <div className="pt-4 border-t border-border/40 space-y-3">
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-bold">Supervision Request Rejected</p>
+                        <p className="text-[11px] leading-relaxed text-red-500/80 font-light">
+                          Your final year project registration request has been rejected by the proposed supervisor.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      className="w-full h-10 rounded-xl text-xs font-bold transition-all duration-300 shadow-md hover:shadow-red-500/10 active:scale-95 cursor-pointer"
+                      onClick={() => deleteGroupMutation.mutate(myGroup.id)}
+                      disabled={deleteGroupMutation.isPending}
+                    >
+                      {deleteGroupMutation.isPending ? "Clearing..." : "Remove Request & Try Again"}
+                    </Button>
+                  </div>
+                )}
               </div>
             </motion.div>
 
@@ -741,6 +785,9 @@ function FYPRoute() {
   if (role === "teacher") {
     const activeTeacher = teachers?.find((t) => t.email?.toLowerCase() === session?.user?.email?.toLowerCase());
     const supervisedGroups = groups?.filter((g) => g.supervisor_id === activeTeacher?.id) ?? [];
+    const activeGroups = supervisedGroups.filter((g) => g.status === "approved");
+    const pendingGroups = supervisedGroups.filter((g) => g.status === "pending");
+    const rejectedGroups = supervisedGroups.filter((g) => g.status === "rejected");
 
     return (
       <div className="space-y-8 max-w-7xl animate-fade-in pb-12">
@@ -749,7 +796,7 @@ function FYPRoute() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
               FYP Portal
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Supervisor Hub
             </h1>
             <p className="text-sm text-muted-foreground font-light">
@@ -767,45 +814,163 @@ function FYPRoute() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Left list of groups */}
-            <div className="space-y-4">
-              <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground pl-1">
-                Supervised Groups
-              </p>
-              {supervisedGroups.map((group) => (
-                <motion.div
-                  key={group.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  whileHover={{ y: -1 }}
-                  className="bg-card/45 backdrop-blur-xl border border-border/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <div className="relative z-10 space-y-3">
-                    <div>
-                      <h3 className="font-serif font-bold text-sm text-foreground">
-                        {group.group_name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground font-light line-clamp-2 mt-0.5 leading-relaxed">
-                        {group.title}
-                      </p>
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap pt-2 border-t border-border/30">
-                      {group.members?.map((mId: string) => {
-                        const stud = students?.find((st) => st.id === mId);
-                        return (
-                          <Badge
-                            key={mId}
-                            variant="outline"
-                            className="text-[9px] px-2 py-0 border-border/60 hover:bg-transparent font-medium"
-                          >
-                            {stud?.full_name || mId}
+            <div className="space-y-6">
+              {pendingGroups.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-amber-500 pl-1">
+                    Pending Supervision Requests
+                  </p>
+                  {pendingGroups.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-amber-500/5 border border-amber-500/25 p-5 rounded-2xl shadow-sm space-y-3 relative overflow-hidden"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-serif font-bold text-sm text-foreground">
+                            {group.group_name}
+                          </h3>
+                          <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-500 border-amber-500/25 uppercase font-bold py-0">
+                            Pending
                           </Badge>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                        </div>
+                        <p className="text-xs text-foreground font-bold leading-snug">
+                          {group.title}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground font-light leading-relaxed">
+                          {group.abstract}
+                        </p>
+                        <div className="flex gap-1.5 flex-wrap pt-1">
+                          {group.members?.map((mId: string) => {
+                            const stud = students?.find((st) => st.id === mId);
+                            return (
+                              <Badge
+                                key={mId}
+                                variant="outline"
+                                className="text-[9px] px-2 py-0 border-border/60 hover:bg-transparent font-medium"
+                              >
+                                {stud?.full_name || mId}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 flex-1 transition-colors cursor-pointer"
+                            onClick={() =>
+                              setGroupStatusMutation.mutate({ id: group.id, status: "approved" })
+                            }
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-8 rounded-lg text-xs font-bold px-3 flex-1 transition-colors cursor-pointer"
+                            onClick={() =>
+                              setGroupStatusMutation.mutate({ id: group.id, status: "rejected" })
+                            }
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground pl-1">
+                  Active Supervised Groups
+                </p>
+                {activeGroups.length === 0 ? (
+                  <p className="text-xs text-muted-foreground font-light pl-1">No active supervised groups.</p>
+                ) : (
+                  activeGroups.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ y: -1 }}
+                      className="bg-card/45 backdrop-blur-xl border border-border/80 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 relative overflow-hidden group"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <div className="relative z-10 space-y-3">
+                        <div>
+                          <h3 className="font-serif font-bold text-sm text-foreground">
+                            {group.group_name}
+                          </h3>
+                          <p className="text-xs text-muted-foreground font-light line-clamp-2 mt-0.5 leading-relaxed">
+                            {group.title}
+                          </p>
+                        </div>
+                        <div className="flex gap-1.5 flex-wrap pt-2 border-t border-border/30">
+                          {group.members?.map((mId: string) => {
+                            const stud = students?.find((st) => st.id === mId);
+                            return (
+                              <Badge
+                                key={mId}
+                                variant="outline"
+                                className="text-[9px] px-2 py-0 border-border/60 hover:bg-transparent font-medium"
+                              >
+                                {stud?.full_name || mId}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+
+              {rejectedGroups.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-red-500 pl-1">
+                    Rejected Requests
+                  </p>
+                  {rejectedGroups.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-red-500/5 border border-red-500/25 p-5 rounded-2xl shadow-sm space-y-3 relative overflow-hidden"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start">
+                          <h3 className="font-serif font-bold text-sm text-foreground">
+                            {group.group_name}
+                          </h3>
+                          <Badge variant="outline" className="text-[9px] bg-red-500/10 text-red-500 border-red-500/25 uppercase font-bold py-0">
+                            Rejected
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-foreground font-bold leading-snug">
+                          {group.title}
+                        </p>
+                        <div className="flex gap-1.5 flex-wrap pt-1">
+                          {group.members?.map((mId: string) => {
+                            const stud = students?.find((st) => st.id === mId);
+                            return (
+                              <Badge
+                                key={mId}
+                                variant="outline"
+                                className="text-[9px] px-2 py-0 border-border/60 hover:bg-transparent font-medium"
+                              >
+                                {stud?.full_name || mId}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Right: Submissions awaiting review */}
@@ -825,7 +990,7 @@ function FYPRoute() {
                   </p>
                 </div>
                 <div className="p-6">
-                  {submissions?.filter((s) => supervisedGroups.some((g) => g.id === s.group_id))
+                  {submissions?.filter((s) => activeGroups.some((g) => g.id === s.group_id))
                     .length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground text-sm font-light">
                       No submissions in queue.
@@ -833,9 +998,9 @@ function FYPRoute() {
                   ) : (
                     <div className="space-y-4">
                       {submissions
-                        ?.filter((s) => supervisedGroups.some((g) => g.id === s.group_id))
+                        ?.filter((s) => activeGroups.some((g) => g.id === s.group_id))
                         .map((sub) => {
-                          const group = supervisedGroups.find((g) => g.id === sub.group_id);
+                          const group = activeGroups.find((g) => g.id === sub.group_id);
                           return (
                             <div
                               key={sub.id}
@@ -982,7 +1147,7 @@ function FYPRoute() {
           <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
             Administration
           </span>
-          <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
             Projects Registry
           </h1>
           <p className="text-sm text-muted-foreground font-light">
@@ -1025,9 +1190,6 @@ function FYPRoute() {
                       </th>
                       <th className="p-4 font-bold text-[10px] uppercase tracking-wider text-muted-foreground">
                         Status
-                      </th>
-                      <th className="p-4 text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -1072,33 +1234,8 @@ function FYPRoute() {
                                     : "bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/10"
                               }`}
                             >
-                              {g.status}
+                              {g.status === "pending" ? "Awaiting Supervisor" : g.status}
                             </Badge>
-                          </td>
-                          <td className="p-4 text-right">
-                            {g.status === "pending" && (
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  className="h-8 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 transition-colors cursor-pointer"
-                                  onClick={() =>
-                                    setGroupStatusMutation.mutate({ id: g.id, status: "approved" })
-                                  }
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="h-8 rounded-lg text-xs font-bold px-3 transition-colors cursor-pointer"
-                                  onClick={() =>
-                                    setGroupStatusMutation.mutate({ id: g.id, status: "rejected" })
-                                  }
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
                           </td>
                         </tr>
                       );

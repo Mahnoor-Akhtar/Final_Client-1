@@ -170,9 +170,12 @@ function TimetableRoute() {
   return (
     <div className="space-y-6 max-w-7xl animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Class Schedules</h1>
-          <p className="text-muted-foreground mt-1">
+        <div className="space-y-1">
+          <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
+            Operations Portal
+          </span>
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">Class Schedules</h1>
+          <p className="text-sm text-muted-foreground font-light mt-1">
             {role === "admin"
               ? "Plan weekly classes, assign rooms, and schedule lecturers."
               : role === "teacher"
@@ -181,11 +184,11 @@ function TimetableRoute() {
           </p>
         </div>
         <div className="flex gap-2">
-          <div className="inline-flex rounded-lg border p-1 bg-muted/50 shrink-0">
+          <div className="inline-flex rounded-xl border border-border/80 p-1 bg-card shrink-0">
             <Button
               size="sm"
               variant={viewMode === "grid" ? "secondary" : "ghost"}
-              className="h-8"
+              className="h-8 rounded-lg text-xs font-bold"
               onClick={() => setViewMode("grid")}
             >
               Weekly Grid
@@ -193,7 +196,7 @@ function TimetableRoute() {
             <Button
               size="sm"
               variant={viewMode === "list" ? "secondary" : "ghost"}
-              className="h-8"
+              className="h-8 rounded-lg text-xs font-bold"
               onClick={() => setViewMode("list")}
             >
               Slots List
@@ -203,14 +206,17 @@ function TimetableRoute() {
           {role === "admin" && (
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="shadow-sm">
+                <Button
+                  className="h-10 px-5 rounded-xl text-xs font-bold text-white shadow-md transition-all duration-300 hover:shadow-primary/10 active:scale-95 cursor-pointer"
+                  style={{ background: "var(--gradient-brand)" }}
+                >
                   <Plus className="h-4 w-4 mr-1.5" /> Schedule Class
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-md rounded-3xl border border-border/80 bg-card/95 backdrop-blur-xl">
                 <DialogHeader>
-                  <DialogTitle>Add Class Slot</DialogTitle>
-                  <DialogDescription>
+                  <DialogTitle className="font-display font-black tracking-tight text-xl text-foreground">Add Class Slot</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground font-light">
                     Assign a lecturer and lecture room to a course slot.
                   </DialogDescription>
                 </DialogHeader>
@@ -324,7 +330,8 @@ function TimetableRoute() {
                   <DialogFooter className="pt-2">
                     <Button
                       type="submit"
-                      className="w-full"
+                      className="w-full rounded-xl h-10 text-xs font-bold text-white shadow-md hover:shadow-primary/10 transition-all cursor-pointer"
+                      style={{ background: "var(--gradient-brand)" }}
                       disabled={createSlotMutation.isPending}
                     >
                       {createSlotMutation.isPending ? "Creating Slot..." : "Confirm Schedule"}
@@ -338,7 +345,7 @@ function TimetableRoute() {
       </div>
 
       {viewMode === "grid" ? (
-        <Card className="shadow-md border-border/60 overflow-hidden">
+        <Card className="bg-card/45 backdrop-blur-xl border border-border/80 rounded-3xl shadow-sm overflow-hidden">
           <CardContent className="p-0 overflow-x-auto">
             <div className="min-w-[800px]">
               <div className="grid grid-cols-6 border-b bg-muted/40 font-semibold text-xs uppercase tracking-wider text-muted-foreground">
@@ -416,16 +423,16 @@ function TimetableRoute() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="shadow-md border-border/60">
+        <Card className="bg-card/45 backdrop-blur-xl border border-border/80 rounded-3xl shadow-sm overflow-hidden">
           <CardContent className="p-0">
             {filteredSchedules.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 No timetable slots found.
               </div>
             ) : (
-              <div className="border rounded-xl overflow-hidden">
+              <div className="overflow-hidden">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-muted/50 border-b">
+                  <thead className="border-b border-border/40">
                     <tr>
                       <th className="p-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">
                         Day

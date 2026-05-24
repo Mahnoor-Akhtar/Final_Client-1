@@ -211,7 +211,7 @@ function AttendanceRoute() {
           <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
             Student Registry
           </span>
-          <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
             Attendance Record
           </h1>
           <p className="text-sm text-muted-foreground font-light">
@@ -226,7 +226,7 @@ function AttendanceRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Attendance Rate
               </p>
-              <p className="mt-2 text-4xl font-serif font-black text-foreground">
+              <p className="mt-2 text-4xl font-display font-black text-foreground">
                 {attPercentage}%
               </p>
               <Badge
@@ -244,7 +244,7 @@ function AttendanceRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Classes Attended
               </p>
-              <p className="mt-2 text-4xl font-serif font-black text-emerald-600">{presentCount}</p>
+              <p className="mt-2 text-4xl font-display font-black text-emerald-600">{presentCount}</p>
               <p className="text-[10px] text-muted-foreground font-light mt-2">
                 Full Presence lectures
               </p>
@@ -257,7 +257,7 @@ function AttendanceRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Classes Late
               </p>
-              <p className="mt-2 text-4xl font-serif font-black text-amber-600">{lateCount}</p>
+              <p className="mt-2 text-4xl font-display font-black text-amber-600">{lateCount}</p>
               <p className="text-[10px] text-muted-foreground font-light mt-2">
                 Counts as half present
               </p>
@@ -270,7 +270,7 @@ function AttendanceRoute() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
                 Classes Missed
               </p>
-              <p className="mt-2 text-4xl font-serif font-black text-rose-600">{absentCount}</p>
+              <p className="mt-2 text-4xl font-display font-black text-rose-600">{absentCount}</p>
               <p className="text-[10px] text-muted-foreground font-light mt-2">
                 Unexcused absences
               </p>
@@ -435,7 +435,7 @@ function AttendanceRoute() {
           <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
             Operations Portal
           </span>
-          <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
             Attendance Control
           </h1>
           <p className="text-sm text-muted-foreground font-light">

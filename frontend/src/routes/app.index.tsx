@@ -70,7 +70,7 @@ function StatCard({
           <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
             {label}
           </p>
-          <p className="text-3xl font-serif font-black tracking-tight text-foreground">{value}</p>
+          <p className="text-3xl font-display font-black tracking-tight text-foreground">{value}</p>
           {hint && <p className="text-[11px] text-muted-foreground font-light pt-1">{hint}</p>}
           {trend && (
             <p className="text-[10px] text-emerald-500 font-bold mt-1.5 flex items-center gap-1">
@@ -217,7 +217,7 @@ function Dashboard() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
               Overview Dashboard
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Admin Control Panel
             </h1>
             <p className="text-sm text-muted-foreground font-light">
@@ -430,7 +430,7 @@ function Dashboard() {
               <div className="grid grid-cols-2 gap-4">
                 {[
                   { label: "Create Timetable", icon: Calendar, path: "/app/timetable" },
-                  { label: "Degree Programs", icon: Award, path: "/app/degrees" },
+                  { label: "Departments", icon: Award, path: "/app/departments" },
                   { label: "Check Fee Dues", icon: Wallet, path: "/app/fees" },
                   { label: "System Settings", icon: Settings, path: "/app/settings" },
                 ].map((item) => (
@@ -468,7 +468,7 @@ function Dashboard() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary">
               Academic Faculty
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Faculty Dashboard
             </h1>
             <p className="text-sm text-muted-foreground font-light">
@@ -670,7 +670,7 @@ function Dashboard() {
             <span className="text-[10px] uppercase font-bold tracking-[0.25em] text-primary block">
               Student Portal
             </span>
-            <h1 className="text-3xl font-serif font-black tracking-tight text-foreground">
+            <h1 className="text-3xl font-display font-black tracking-tight text-foreground">
               Student Workspace
             </h1>
             <p className="text-sm text-muted-foreground font-light">

@@ -73,8 +73,9 @@ function SettingsRoute() {
   });
 
   // 3. Fetch Notifications
-  const { data: notifications } = useQuery({
-    queryKey: ["settings-notifications"],
+  const userKey = session?.user?.email?.toLowerCase() || session?.user?.id;
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["settings-notifications", userKey],
     queryFn: async () => {
       const { data } = await mern
         .from("notifications")
@@ -82,6 +83,17 @@ function SettingsRoute() {
         .order("created_at", { ascending: false });
       return data ?? [];
     },
+    enabled: !!session?.user,
+  });
+
+  // Filter to current user's notifications (user_id may be email, id, or role)
+  const myNotifications = (notifications as any[]).filter((n) => {
+    const target = String(n.user_id || "").toLowerCase();
+    return (
+      target === String(session?.user?.id || "").toLowerCase() ||
+      target === String(session?.user?.email || "").toLowerCase() ||
+      target === String(role || "").toLowerCase()
+    );
   });
 
   // 4. Fetch Departments
@@ -192,7 +204,7 @@ function SettingsRoute() {
 
   const markAllReadMutation = useMutation({
     mutationFn: async () => {
-      const list = notifications ?? [];
+      const list = myNotifications;
       const promises = list.map((item) =>
         mern.from("notifications").update({ read: true }).eq("id", item.id),
       );
@@ -231,7 +243,8 @@ function SettingsRoute() {
     });
   };
 
-  const handlePasswordReset = (e: React.FormEvent) => {
+  const [pwLoading, setPwLoading] = useState(false);
+  const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPassword || !newPassword || !confirmPassword) {
       toast.warning("Please fill all fields");
@@ -241,7 +254,17 @@ function SettingsRoute() {
       toast.error("New passwords do not match!");
       return;
     }
-    // Mock success
+    if (newPassword.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+    setPwLoading(true);
+    const { error } = await mern.auth.changePassword({ oldPassword, newPassword });
+    setPwLoading(false);
+    if (error) {
+      toast.error(error.message || "Failed to update password");
+      return;
+    }
     toast.success("Password updated successfully!");
     setOldPassword("");
     setNewPassword("");
@@ -288,10 +311,9 @@ function SettingsRoute() {
                   />
                   <span className="text-xs tracking-wide">{pane.label}</span>
                   {pane.value === "notifications" &&
-                    notifications &&
-                    notifications.filter((n) => !n.read).length > 0 && (
+                    myNotifications.filter((n) => !n.read).length > 0 && (
                       <Badge className="ml-auto bg-destructive text-destructive-foreground hover:bg-destructive font-mono text-[9px] px-1.5 py-0.5 rounded-full">
-                        {notifications.filter((n) => !n.read).length}
+                        {myNotifications.filter((n) => !n.read).length}
                       </Badge>
                     )}
                 </Button>
@@ -516,7 +538,7 @@ function SettingsRoute() {
                     Official notices and transaction alerts.
                   </p>
                 </div>
-                {notifications && notifications.filter((n) => !n.read).length > 0 && (
+                {myNotifications.filter((n) => !n.read).length > 0 && (
                   <Button
                     onClick={() => markAllReadMutation.mutate()}
                     size="sm"
@@ -528,13 +550,13 @@ function SettingsRoute() {
                 )}
               </div>
               <CardContent className="p-0">
-                {notifications?.length === 0 ? (
+                {myNotifications.length === 0 ? (
                   <div className="text-center py-16 text-muted-foreground text-xs font-light">
                     No notices in your inbox.
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    {notifications?.map((n) => (
+                    {myNotifications.map((n) => (
                       <div
                         key={n.id}
                         className={`p-4 flex gap-3 rounded-2xl hover:bg-secondary/40 border border-transparent hover:border-border/40 transition-all cursor-pointer ${
@@ -633,10 +655,11 @@ function SettingsRoute() {
                   <div className="pt-2">
                     <Button
                       type="submit"
+                      disabled={pwLoading}
                       className="h-10 px-6 rounded-xl text-xs font-bold text-white shadow-md transition-all duration-300 hover:shadow-primary/10 active:scale-95 cursor-pointer"
                       style={{ background: "var(--gradient-brand)" }}
                     >
-                      Update Password
+                      {pwLoading ? "Updating…" : "Update Password"}
                     </Button>
                   </div>
                 </form>
