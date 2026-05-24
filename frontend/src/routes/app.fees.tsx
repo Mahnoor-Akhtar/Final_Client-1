@@ -174,125 +174,59 @@ function FeesRoute() {
   };
 
   const handleDownloadReceipt = (invoice: any) => {
-    toast.success(`Downloading PDF receipt for ${invoice.title}`);
+    const studentName = students?.find((s: any) => s.id === invoice.student_id)?.full_name ?? "N/A";
+    const rollNumber  = students?.find((s: any) => s.id === invoice.student_id)?.roll_number ?? "";
+    toast.success(`Generating receipt for ${invoice.title}`);
 
-    // Simple window print or mock download
     const win = window.open("", "_blank");
     if (win) {
       win.document.write(`
         <html>
           <head>
-            <title>Fee Receipt - ${invoice.id}</title>
-            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+            <title>Fee Slip - ${invoice.title}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
             <style>
-              body { 
-                font-family: 'Plus Jakarta Sans', sans-serif; 
-                padding: 40px; 
-                color: #1a1e29; 
-                background: #fdfdfd;
-              }
-              .receipt-box { 
-                border: 1px solid #e2e8f0; 
-                padding: 40px; 
-                border-radius: 24px; 
-                max-width: 600px; 
-                margin: 0 auto; 
-                background: white;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.02);
-                position: relative;
-                overflow: hidden;
-              }
-              .receipt-box::before {
-                content: '';
-                position: absolute;
-                top: 0; left: 0; right: 0;
-                height: 6px;
-                background: linear-gradient(90deg, #b392ac 0%, #1e293b 100%);
-              }
-              .header { 
-                text-align: center; 
-                margin-bottom: 40px; 
-                padding-bottom: 30px;
-                border-bottom: 1px solid #f1f5f9;
-              }
-              .header h2 { 
-                font-family: 'Outfit', sans-serif; 
-                font-size: 26px;
-                font-weight: 900;
-                letter-spacing: -0.02em;
-                margin: 0 0 8px 0;
-                color: #0f172a;
-              }
-              .header p {
-                margin: 0;
-                font-size: 10px;
-                text-transform: uppercase;
-                letter-spacing: 0.2em;
-                color: #64748b;
-                font-weight: 700;
-              }
-              .row { 
-                display: flex; 
-                justify-content: space-between; 
-                margin: 14px 0; 
-                padding-bottom: 8px; 
-                border-bottom: 1px solid #f8fafc;
-                font-size: 13px;
-              }
-              .row strong {
-                color: #64748b;
-                font-weight: 500;
-              }
-              .row span {
-                color: #0f172a;
-                font-weight: 600;
-              }
-              .footer { 
-                text-align: center; 
-                margin-top: 40px; 
-                font-size: 11px; 
-                color: #94a3b8; 
-                font-weight: 400;
-                line-height: 1.6;
-              }
-              .stamp-container {
-                display: flex;
-                justify-content: center;
-                margin: 24px 0 10px 0;
-              }
-              .stamp { 
-                display: inline-block; 
-                padding: 6px 20px; 
-                border: 2px solid #10b981; 
-                color: #10b981; 
-                font-weight: 800; 
-                text-transform: uppercase;
-                font-size: 14px;
-                letter-spacing: 0.1em;
-                border-radius: 8px;
-                transform: rotate(-3deg); 
-                background: rgba(16, 185, 129, 0.03);
-              }
+              *{box-sizing:border-box;margin:0;padding:0}
+              body{font-family:'Plus Jakarta Sans',sans-serif;background:#F8FAFC;display:flex;justify-content:center;padding:40px 16px}
+              .slip{background:#fff;border-radius:24px;max-width:600px;width:100%;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.08)}
+              .top{background:linear-gradient(135deg,#2563EB 0%,#1d4ed8 100%);padding:36px 40px;color:#fff;position:relative}
+              .top::after{content:'FEE SLIP';position:absolute;right:32px;top:50%;transform:translateY(-50%);font-size:11px;
+                          font-weight:900;letter-spacing:.3em;opacity:.25;font-family:'Outfit',sans-serif}
+              .top h1{font-family:'Outfit',sans-serif;font-size:22px;font-weight:900;letter-spacing:-.5px}
+              .top p{font-size:11px;text-transform:uppercase;letter-spacing:.2em;margin-top:4px;opacity:.8}
+              .body{padding:32px 40px}
+              .row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid #F1F5F9;font-size:13.5px}
+              .row:last-of-type{border-bottom:none}
+              .lbl{color:#64748B;font-weight:500}
+              .val{color:#0F172A;font-weight:700;text-align:right}
+              .val.big{color:#2563EB;font-size:20px;font-family:'Outfit',sans-serif}
+              .stamp-wrap{display:flex;justify-content:center;margin:24px 0 8px}
+              .stamp{border:2.5px solid #16A34A;color:#16A34A;font-weight:900;font-size:13px;
+                     text-transform:uppercase;letter-spacing:.12em;padding:6px 22px;
+                     border-radius:8px;transform:rotate(-3deg);background:rgba(22,163,74,.04);
+                     font-family:'Outfit',sans-serif}
+              .footer{text-align:center;font-size:11px;color:#94A3B8;padding:0 40px 32px;line-height:1.8}
+              @media print{body{padding:0;background:#fff}.slip{box-shadow:none;border-radius:0}button{display:none}}
             </style>
           </head>
           <body>
-            <div class="receipt-box">
-              <div class="header">
-                <h2>PUNJAB COLLEGES</h2>
-                <p>Official Transaction Receipt</p>
+            <div class="slip">
+              <div class="top">
+                <h1>Punjab Group of Colleges</h1>
+                <p>Official Fee Payment Receipt</p>
               </div>
-              <div class="row"><strong>Invoice ID</strong> <span>${invoice.id}</span></div>
-              <div class="row"><strong>Student ID</strong> <span>${invoice.student_id}</span></div>
-              <div class="row"><strong>Description</strong> <span>${invoice.title}</span></div>
-              <div class="row"><strong>Amount Paid</strong> <span>PKR ${invoice.amount.toLocaleString()}</span></div>
-              <div class="row"><strong>Payment Method</strong> <span>${invoice.method || "Electronic Checkout"}</span></div>
-              <div class="row"><strong>Paid On</strong> <span>${new Date(invoice.paid_at).toLocaleString()}</span></div>
-              <div class="stamp-container">
-                <div class="stamp">Verified Paid</div>
+              <div class="body">
+                <div class="row"><span class="lbl">Invoice ID</span><span class="val">${invoice.id}</span></div>
+                <div class="row"><span class="lbl">Student Name</span><span class="val">${studentName}</span></div>
+                ${rollNumber ? `<div class="row"><span class="lbl">Roll Number</span><span class="val">${rollNumber}</span></div>` : ""}
+                <div class="row"><span class="lbl">Description</span><span class="val">${invoice.title}</span></div>
+                <div class="row"><span class="lbl">Amount Paid</span><span class="val big">PKR ${Number(invoice.amount).toLocaleString()}</span></div>
+                <div class="row"><span class="lbl">Payment Method</span><span class="val">${invoice.method || "Electronic Checkout"}</span></div>
+                <div class="row"><span class="lbl">Due Date</span><span class="val">${invoice.due_date ?? "-"}</span></div>
+                <div class="row"><span class="lbl">Paid On</span><span class="val">${invoice.paid_at ? new Date(invoice.paid_at).toLocaleString() : "-"}</span></div>
+                <div class="stamp-wrap"><div class="stamp">✓ Verified Paid</div></div>
               </div>
-              <div class="footer">
-                <p>This is a computer-generated transaction receipt from Punjab Colleges Student Portal.<br>No physical signature is required.</p>
-              </div>
+              <div class="footer">This is a computer-generated receipt from the Punjab Colleges Student Portal.<br>No physical signature is required.</div>
             </div>
             <script>window.print();</script>
           </body>

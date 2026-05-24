@@ -5,6 +5,7 @@ use Slim\Factory\AppFactory;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use App\Database;
+use App\Cache;
 use App\Models\User;
 use App\Models\UserRole;
 use App\Models\Student;
@@ -41,6 +42,9 @@ $app = AppFactory::create();
 // Add routing middleware
 $app->addRoutingMiddleware();
 
+// Add error middleware to handle Slim exceptions (like 404 Not Found) gracefully
+$app->addErrorMiddleware(true, true, true);
+
 // CORS Middleware
 $app->add(function (Request $request, $handler) {
     if ($request->getMethod() === 'OPTIONS') {
@@ -50,8 +54,32 @@ $app->add(function (Request $request, $handler) {
     }
     return $response
         ->withHeader('Access-Control-Allow-Origin', '*')
-        ->withHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization')
+        ->withHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization, Accept-Encoding')
         ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+});
+
+// Gzip compression middleware
+$app->add(function (Request $request, $handler) {
+    $response = $handler->handle($request);
+    $accept = $request->getHeaderLine('Accept-Encoding');
+    $body = (string) $response->getBody();
+    if (strlen($body) > 256 && str_contains($accept, 'gzip') && function_exists('gzencode')) {
+        $compressed = gzencode($body, 6);
+        if ($compressed !== false) {
+            $newResponse = new \Slim\Psr7\Response($response->getStatusCode());
+            $newResponse->getBody()->write($compressed);
+            foreach ($response->getHeaders() as $name => $values) {
+                foreach ($values as $value) {
+                    $newResponse = $newResponse->withAddedHeader($name, $value);
+                }
+            }
+            return $newResponse
+                ->withHeader('Content-Encoding', 'gzip')
+                ->withHeader('Vary', 'Accept-Encoding')
+                ->withHeader('Content-Length', (string) strlen($compressed));
+        }
+    }
+    return $response;
 });
 
 // Models map
@@ -396,6 +424,16 @@ $app->get('/api/auth/google/callback', function (Request $request, Response $res
         ->withStatus(302);
 });
 
+// Root route
+$app->get('/', function (Request $request, Response $response) {
+    $response->getBody()->write(json_encode([
+        'message' => 'PGC CMS API is running',
+        'status' => 'healthy',
+        'health_check' => '/health'
+    ]));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+
 // Health check
 $app->get('/health', function (Request $request, Response $response) {
     $response->getBody()->write(json_encode([
@@ -453,6 +491,15 @@ $app->get('/api/dashboard/stats', function (Request $request, Response $response
         if (!$role) {
             $userRoleDoc = UserRole::where('user_id', $userId)->first();
             $role = $userRoleDoc ? $userRoleDoc->role : '';
+        }
+
+        // Check server-side cache first (120 second TTL per user+role)
+        $cacheKey = Cache::key('dashboard_stats_' . $role . '_' . $userId);
+        $cached = Cache::get($cacheKey, 120);
+        if ($cached !== null) {
+            $response->getBody()->write($cached);
+            return $response->withHeader('Content-Type', 'application/json')
+                            ->withHeader('X-Cache', 'HIT');
         }
 
         $data = [];
@@ -520,37 +567,36 @@ $app->get('/api/dashboard/stats', function (Request $request, Response $response
                     return $f->toArray();
                 })->toArray();
                 
-                $timetable = Timetable::where('department_id', $student->department_id)->get()->map(function($t) {
+                $studentCourseIds = is_array($student->courses) ? $student->courses : [];
+                $timetableQuery = Timetable::query();
+                if (!empty($studentCourseIds)) {
+                    $timetableQuery->whereIn('course_id', $studentCourseIds);
+                } else {
+                    $timetableQuery->whereRaw('1 = 0');
+                }
+                $timetable = $timetableQuery->get()->map(function($t) {
                     return $t->toArray();
                 })->toArray();
                 
                 $department = $student->department_id ? App\Models\Department::find($student->department_id) : null;
                 $deptArray = $department ? $department->toArray() : null;
 
-                // Find student's FYP group
+                // Optimized: use ANY() for PostgreSQL text[] instead of loading ALL groups
                 $myFyp = null;
-                $allFypGroups = FypGroup::all();
-                foreach ($allFypGroups as $g) {
-                    if (is_array($g->members) && in_array($student->id, $g->members)) {
-                        $myFyp = $g->toArray();
-                        break;
-                    }
+                $fypGroup = FypGroup::whereRaw("? = ANY(members)", [$student->id])->first();
+                if ($fypGroup) {
+                    $myFyp = $fypGroup->toArray();
                 }
 
-                // Filter student courses
-                $allCourses = Course::all();
-                $studentCourses = [];
-                $studentCourseIds = is_array($student->courses) ? $student->courses : [];
-                foreach ($allCourses as $c) {
-                    if (!empty($studentCourseIds)) {
-                        if (in_array($c->id, $studentCourseIds)) {
-                            $studentCourses[] = $c->toArray();
-                        }
-                    } else {
-                        if ($c->department_id === $student->department_id) {
-                            $studentCourses[] = $c->toArray();
-                        }
-                    }
+                // Optimized: use WHERE IN instead of loading ALL courses
+                if (!empty($studentCourseIds)) {
+                    $studentCourses = Course::whereIn('id', $studentCourseIds)->get()->map(function($c) {
+                        return $c->toArray();
+                    })->toArray();
+                } else {
+                    $studentCourses = Course::where('department_id', $student->department_id)->get()->map(function($c) {
+                        return $c->toArray();
+                    })->toArray();
                 }
 
                 $data = [
@@ -565,11 +611,17 @@ $app->get('/api/dashboard/stats', function (Request $request, Response $response
             }
         }
 
-        $response->getBody()->write(json_encode([
+        $jsonResponse = json_encode([
             'data' => $data,
             'error' => null
-        ]));
-        return $response->withHeader('Content-Type', 'application/json');
+        ]);
+
+        // Store in cache for 120 seconds
+        Cache::set($cacheKey, $jsonResponse);
+
+        $response->getBody()->write($jsonResponse);
+        return $response->withHeader('Content-Type', 'application/json')
+                        ->withHeader('X-Cache', 'MISS');
     } catch (\Exception $e) {
         $response->getBody()->write(json_encode(['error' => ['message' => $e->getMessage()]]));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
@@ -583,6 +635,17 @@ $app->get('/api/data/{table}', function (Request $request, Response $response, a
     $table = $args['table'];
     $modelClass = $modelsMap[$table];
     $queryParams = $request->getQueryParams();
+
+    // Server-side cache: 60 second TTL per user+table+params
+    $userAttrForCache = $request->getAttribute('user');
+    $cacheUserId = $userAttrForCache['id'] ?? 'anon';
+    $cacheKey = Cache::key('data_' . $table . '_' . serialize($queryParams) . '_' . $cacheUserId);
+    $cached = Cache::get($cacheKey, 60);
+    if ($cached !== null) {
+        $response->getBody()->write($cached);
+        return $response->withHeader('Content-Type', 'application/json')
+                        ->withHeader('X-Cache', 'HIT');
+    }
 
     $orderCol = $queryParams['_order'] ?? null;
     $orderAsc = ($queryParams['_asc'] ?? 'true') !== 'false';
@@ -633,8 +696,6 @@ $app->get('/api/data/{table}', function (Request $request, Response $response, a
         if ($table === 'fees') {
             $response->getBody()->write(json_encode(['data' => [], 'count' => 0, 'error' => null]));
             return $response->withHeader('Content-Type', 'application/json');
-        } elseif ($table === 'complaints') {
-            $normalizedFilters['teacher_id'] = $teacherId;
         } elseif ($table === 'timetables') {
             $normalizedFilters['teacher_id'] = $teacherId;
         } elseif ($table === 'fyp_groups') {
@@ -716,17 +777,26 @@ $app->get('/api/data/{table}', function (Request $request, Response $response, a
     }
 
     $docs = $query->get();
-    $response->getBody()->write(json_encode([
+    $jsonResponse = json_encode([
         'data' => $docs,
         'count' => count($docs),
         'error' => null
-    ]));
-    return $response->withHeader('Content-Type', 'application/json');
+    ]);
+
+    // Store in cache
+    Cache::set($cacheKey, $jsonResponse);
+
+    $response->getBody()->write($jsonResponse);
+    return $response->withHeader('Content-Type', 'application/json')
+                    ->withHeader('X-Cache', 'MISS');
 })->add($validateTable)->add(new AuthMiddleware());
 
 // POST (Create)
 $app->post('/api/data/{table}', function (Request $request, Response $response, array $args) use ($modelsMap) {
     $table = $args['table'];
+
+    // Invalidate cache on data mutation
+    Cache::invalidate();
 
     // Role-based write privilege validation
     $userAttr = $request->getAttribute('user');
@@ -802,6 +872,50 @@ $app->post('/api/data/{table}', function (Request $request, Response $response, 
             error_log("Auto-created user for admin-added $role: $email");
         }
         $profileData['user_id'] = $user->id;
+
+        // Auto-populate required database fields if missing from the request
+        if ($role === 'student') {
+            if (empty($profileData['roll_number'])) {
+                $profileData['roll_number'] = 'ROLL-' . rand(1000, 9999);
+            }
+            if (empty($profileData['department_id'])) {
+                $profileData['department_id'] = 'dept-cs';
+            }
+            if (empty($profileData['degree'])) {
+                $profileData['degree'] = 'BSCS';
+            }
+            if (!isset($profileData['semester'])) {
+                $profileData['semester'] = 1;
+            }
+        } else if ($role === 'teacher') {
+            if (empty($profileData['employee_id'])) {
+                $profileData['employee_id'] = 'EMP-' . rand(1000, 9999);
+            }
+            if (empty($profileData['department_id'])) {
+                $profileData['department_id'] = 'dept-cs';
+            }
+            if (empty($profileData['qualification'])) {
+                $profileData['qualification'] = 'MS CS';
+            }
+            if (!isset($profileData['salary'])) {
+                $profileData['salary'] = 80000;
+            }
+        }
+    };
+
+    $sanitizeCourseData = function(&$courseData) {
+        if (!isset($courseData['credit_hours'])) {
+            $courseData['credit_hours'] = 3;
+        }
+        if (empty($courseData['semester'])) {
+            $courseData['semester'] = 1;
+        }
+        if (empty($courseData['degree'])) {
+            $courseData['degree'] = 'BSCS';
+        }
+        if (empty($courseData['department_id'])) {
+            $courseData['department_id'] = 'dept-cs';
+        }
     };
 
     try {
@@ -814,6 +928,8 @@ $app->post('/api/data/{table}', function (Request $request, Response $response, 
                     $autoCreateUserForProfile($item, 'student');
                 } else if ($table === 'teachers') {
                     $autoCreateUserForProfile($item, 'teacher');
+                } else if ($table === 'courses') {
+                    $sanitizeCourseData($item);
                 }
                 
                 // Strip incoming _id and normalize to id
@@ -822,7 +938,29 @@ $app->post('/api/data/{table}', function (Request $request, Response $response, 
                     unset($item['_id']);
                 }
                 
-                $doc = $modelClass::create($item);
+                // ATTENDANCE UPSERT (bulk): prevent duplicate records for same student+course+date
+                if ($table === 'attendance'
+                    && !empty($item['student_id'])
+                    && !empty($item['course_id'])
+                    && !empty($item['date'])
+                ) {
+                    $existing = \App\Models\Attendance::where('student_id', $item['student_id'])
+                        ->where('course_id', $item['course_id'])
+                        ->where('date', $item['date'])
+                        ->first();
+                    if ($existing) {
+                        if (isset($item['status'])) {
+                            $existing->status = $item['status'];
+                            $existing->save();
+                        }
+                        $doc = $existing;
+                    } else {
+                        $doc = $modelClass::create($item);
+                    }
+                } else {
+                    $doc = $modelClass::create($item);
+                }
+                
                 $inserted[] = $doc;
             }
             $result = $inserted;
@@ -832,14 +970,39 @@ $app->post('/api/data/{table}', function (Request $request, Response $response, 
                 $autoCreateUserForProfile($data, 'student');
             } else if ($table === 'teachers') {
                 $autoCreateUserForProfile($data, 'teacher');
+            } else if ($table === 'courses') {
+                $sanitizeCourseData($data);
             }
             
-            if (isset($data['_id'])) {
-                $data['id'] = $data['_id'];
-                unset($data['_id']);
+            // ATTENDANCE UPSERT: prevent duplicate records for same student+course+date
+            if ($table === 'attendance'
+                && !empty($data['student_id'])
+                && !empty($data['course_id'])
+                && !empty($data['date'])
+            ) {
+                $existing = \App\Models\Attendance::where('student_id', $data['student_id'])
+                    ->where('course_id', $data['course_id'])
+                    ->where('date', $data['date'])
+                    ->first();
+
+                if ($existing) {
+                    // Record exists – update status only
+                    if (isset($data['status'])) {
+                        $existing->status = $data['status'];
+                        $existing->save();
+                    }
+                    $result = $existing;
+                } else {
+                    $result = $modelClass::create($data);
+                }
+            } else {
+                if (isset($data['_id'])) {
+                    $data['id'] = $data['_id'];
+                    unset($data['_id']);
+                }
+                
+                $result = $modelClass::create($data);
             }
-            
-            $result = $modelClass::create($data);
         }
 
         // Auto-create profile if inserting a role into user_roles
@@ -910,6 +1073,9 @@ $app->post('/api/data/{table}', function (Request $request, Response $response, 
 // PUT (Update)
 $app->put('/api/data/{table}', function (Request $request, Response $response, array $args) use ($modelsMap) {
     $table = $args['table'];
+
+    // Invalidate cache on data mutation
+    Cache::invalidate();
 
     // Role-based write privilege validation
     $userAttr = $request->getAttribute('user');
@@ -1063,6 +1229,9 @@ $app->put('/api/data/{table}', function (Request $request, Response $response, a
 // DELETE (Delete)
 $app->delete('/api/data/{table}', function (Request $request, Response $response, array $args) use ($modelsMap) {
     $table = $args['table'];
+
+    // Invalidate cache on data mutation
+    Cache::invalidate();
 
     // Role-based write privilege validation
     $userAttr = $request->getAttribute('user');

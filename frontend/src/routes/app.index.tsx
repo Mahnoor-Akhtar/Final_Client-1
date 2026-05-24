@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { mern } from "@/integrations/mern/client";
 import { useAuth } from "@/hooks/use-auth";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import {
   Users,
   GraduationCap,
@@ -91,8 +95,35 @@ function StatCard({
 function Dashboard() {
   const { session, role } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [selectedComplaint, setSelectedComplaint] = useState<any>(null);
+  const [adminReply, setAdminReply] = useState("");
+  const [isResolveOpen, setIsResolveOpen] = useState(false);
 
-  // Load unified dashboard stats
+  const resolveComplaintMutation = useMutation({
+    mutationFn: async (payload: { id: string; reply: string }) => {
+      await mern
+        .from("complaints")
+        .update({
+          reply: payload.reply,
+          status: "resolved",
+        })
+        .eq("id", payload.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["complaints"] });
+      toast.success("Complaint resolved and reply dispatched");
+      setIsResolveOpen(false);
+      setSelectedComplaint(null);
+      setAdminReply("");
+    },
+    onError: () => {
+      toast.error("Failed to resolve complaint");
+    },
+  });
+
+  // Load unified dashboard stats — staleTime keeps cached data visible instantly
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ["dashboard-stats", role, session?.user?.email],
     queryFn: async () => {
@@ -111,6 +142,9 @@ function Dashboard() {
       return json.data;
     },
     enabled: !!role && !!session?.user,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const adminData = role === "admin" ? dashboardData : null;
@@ -334,7 +368,12 @@ function Dashboard() {
                   stats?.pendingComplaints.map((c: any) => (
                     <div
                       key={c.id}
-                      className="p-4 border border-border/50 rounded-2xl bg-secondary/25 hover:bg-secondary/40 transition-colors flex justify-between items-center gap-4"
+                      className="p-4 border border-border/50 rounded-2xl bg-secondary/25 hover:bg-secondary/40 transition-colors flex justify-between items-center gap-4 cursor-pointer"
+                      onClick={() => {
+                        setSelectedComplaint(c);
+                        setAdminReply("");
+                        setIsResolveOpen(true);
+                      }}
                     >
                       <div className="space-y-1">
                         <p className="font-semibold text-sm text-foreground">{c.title}</p>
@@ -389,6 +428,59 @@ function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Resolve Dialog */}
+        <Dialog open={isResolveOpen} onOpenChange={setIsResolveOpen}>
+          <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-2xl border border-border/80 rounded-3xl shadow-lg">
+            <DialogHeader>
+              <DialogTitle className="font-serif font-bold text-xl text-foreground">
+                Resolve Ticket
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground font-light">
+                Submit response message for student ticket:{" "}
+                <span className="font-bold text-foreground">{selectedComplaint?.title}</span>
+              </DialogDescription>
+            </DialogHeader>
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!selectedComplaint || !adminReply) {
+                  toast.warning("Please enter a response message");
+                  return;
+                }
+                resolveComplaintMutation.mutate({
+                  id: selectedComplaint.id,
+                  reply: adminReply,
+                });
+              }} 
+              className="space-y-4 py-2"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground font-semibold">
+                  Resolution remarks
+                </label>
+                <Textarea
+                  placeholder="Write official resolution details or reply to student..."
+                  value={adminReply}
+                  onChange={(e) => setAdminReply(e.target.value)}
+                  rows={5}
+                  className="rounded-xl border border-border/80 bg-background/50 focus:border-primary/50 focus:ring-1 focus:ring-primary/50"
+                />
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={resolveComplaintMutation.isPending}
+                  className="w-full h-11 rounded-xl text-white font-bold transition-all duration-300 shadow-md hover:shadow-primary/10 active:scale-95 cursor-pointer"
+                  style={{ background: "var(--gradient-brand)" }}
+                >
+                  {resolveComplaintMutation.isPending ? "Resolving..." : "Save Resolution & Dispatch"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }

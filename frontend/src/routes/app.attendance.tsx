@@ -220,9 +220,19 @@ function AttendanceRoute() {
       );
     }
 
-    // Filter attendance records for current student
-    const studentAttendance =
+    // Filter attendance records for current student — deduplicated per course+date
+    const rawStudentAttendance =
       attendanceRecords?.filter((r) => r.student_id === currentStudent.id) ?? [];
+    // Keep only the latest record per (course_id, date) pair
+    const dedupeMap = new Map<string, any>();
+    rawStudentAttendance.forEach((r) => {
+      const key = `${r.course_id}_${r.date}`;
+      const prev = dedupeMap.get(key);
+      if (!prev || String(r.id) > String(prev.id)) {
+        dedupeMap.set(key, r);
+      }
+    });
+    const studentAttendance = Array.from(dedupeMap.values());
     const totalClasses = studentAttendance.length;
     const presentCount = studentAttendance.filter((a) => a.status === "present").length;
     const lateCount = studentAttendance.filter((a) => a.status === "late").length;
