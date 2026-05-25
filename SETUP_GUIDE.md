@@ -2,7 +2,7 @@
 
 > **Purpose**: Step-by-step instructions to set up this entire project (Web Frontend, Mobile App, PHP Backend) on **any new laptop** with a **new Supabase PostgreSQL database**, without breaking or disturbing the database schema.
 
----
+----
 
 ## Table of Contents
 1. [Prerequisites](#1-prerequisites)
